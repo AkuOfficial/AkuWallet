@@ -1,0 +1,12 @@
+[project]
+name = "wallet-backend"
+version = "0.1.0"
+description = "Python FastAPI backend for Wallet personal finance app"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.128.1",
+    # "supabase>=2.0.0", # TEMP: disabled while using local SQLite
+    "pydantic>=2.0.0",
+    "openai>=1.0.0",
+    "aiosqlite>=0.21.0",
+]
