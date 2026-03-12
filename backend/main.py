@@ -834,12 +834,28 @@ async def suggest_category(
     )
     from typing import Any, cast
     
-    # Get AI Gateway API key if available, otherwise use OpenAI
+    # Prefer hosted AI if configured; otherwise allow local Ollama (free, no API key).
     api_key = os.environ.get("AI_GATEWAY_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise fastapi.HTTPException(status_code=500, detail="AI API key not configured")
-    
-    client = openai.AsyncOpenAI(api_key=api_key)
+    openai_model = os.environ.get("OPENAI_MODEL") or "gpt-4o-mini"
+    ollama_base_url = os.environ.get("OLLAMA_BASE_URL")
+    ollama_model = os.environ.get("OLLAMA_MODEL") or "llama3.1"
+
+    if api_key:
+        client = openai.AsyncOpenAI(api_key=api_key)
+        model = openai_model
+        use_response_format = True
+    elif ollama_base_url:
+        base = ollama_base_url.rstrip("/")
+        if not base.endswith("/v1"):
+            base = f"{base}/v1"
+        client = openai.AsyncOpenAI(api_key="ollama", base_url=base)
+        model = ollama_model
+        use_response_format = False
+    else:
+        raise fastapi.HTTPException(
+            status_code=500,
+            detail="AI not configured. Set OPENAI_API_KEY (hosted) or OLLAMA_BASE_URL (local).",
+        )
     
     category_names = ", ".join(
         c["name"] for c in data.categories if c["type"] == data.type
@@ -861,13 +877,11 @@ async def suggest_category(
                        f"If none seem appropriate, return null for suggestedCategory.",
         }
         messages: list[ChatCompletionMessageParam] = [system_msg, user_msg]
-        response_format = cast(Any, {"type": "json_object"})
+        create_kwargs: dict[str, Any] = {"model": model, "messages": messages}
+        if use_response_format:
+            create_kwargs["response_format"] = cast(Any, {"type": "json_object"})
 
-        response = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            response_format=response_format,
-        )
+        response = await client.chat.completions.create(**create_kwargs)
         
         import json
         result = json.loads(response.choices[0].message.content)

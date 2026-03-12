@@ -6,9 +6,10 @@ This guide will help you set up the AkuWallet project for local development.
 
 Before you begin, ensure you have the following installed:
 
-- **Node.js** 18 or higher
-- **pnpm** (recommended) or npm
-- **Python** 3.12 or higher
+- **Node.js** 25.8.0
+- **pnpm** 10.32.1
+- **Python** 3.14.3
+- **uv** 0.10.9
 - **Git**
 
 ## Step 1: Clone the Repository
@@ -18,7 +19,11 @@ git clone https://github.com/yourusername/AkuWallet.git
 cd AkuWallet
 ```
 
-## Step 2: Set Up Supabase
+## Step 2: Choose Database Mode
+
+This project supports two backend database modes.
+
+### Option 1: Supabase (Postgres)
 
 1. Go to [supabase.com](https://supabase.com) and create a new project
 2. Wait for the project to be fully initialized
@@ -27,29 +32,51 @@ cd AkuWallet
    - Anon/Public Key
    - Service Role Key (keep this secret!)
 
+### Option 2: Local Database (SQLite)
+
+- No cloud account needed.
+- The backend will create and migrate a local SQLite file automatically on startup.
+- Optional: set `LOCAL_DB_PATH` (defaults to `backend/local.db`).
+
 ## Step 3: Run Database Migrations
+
+### Option 1 (Supabase)
 
 1. In your Supabase project, go to the SQL Editor
 2. Open and run `scripts/001_create_wallet_tables.sql`
 3. Then run `scripts/002_seed_default_categories.sql`
 
-These scripts will create all necessary tables and seed default categories.
+### Option 2 (SQLite)
+
+- No manual migrations required. Tables + default categories are created on backend startup.
+
+For Supabase, these scripts will create all necessary tables and seed default categories.
 
 ## Step 4: Configure Environment Variables
 
 Create a `.env.local` file in the root directory:
 
 ```env
-# Supabase Configuration
+# Supabase Configuration (Frontend)
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 # Backend Configuration (create a .env file in the backend directory)
+# Option 1: Supabase (Backend)
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your-service-role-key
 
-# Optional: AI Features
-OPENAI_API_KEY=your-openai-api-key
+# Option 2: SQLite (Backend)
+# LOCAL_DB_PATH=backend/local.db
+
+# Optional: AI Features (Backend)
+# Option A: Hosted OpenAI-compatible (requires API key)
+# OPENAI_API_KEY=your-openai-api-key
+# OPENAI_MODEL=gpt-4o-mini
+#
+# Option B: Local Ollama (free, no API key)
+# OLLAMA_BASE_URL=http://localhost:11434
+# OLLAMA_MODEL=llama3.1
 ```
 
 Also create `backend/.env` with the backend variables.
@@ -72,13 +99,11 @@ The frontend will be available at `http://localhost:3000`
 # Navigate to backend directory
 cd backend
 
-# Install Python dependencies
-pip install -e .
+# Create a virtual environment (.venv) and install with uv
+uv venv
 
-# Or use a virtual environment (recommended)
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -e .
+# Install Python dependencies (editable)
+uv pip install -e .
 ```
 
 ## Step 7: Start the Backend Server
@@ -88,7 +113,7 @@ pip install -e .
 cd backend
 
 # Start FastAPI development server
-fastapi dev main.py
+uv run fastapi dev main.py
 ```
 
 The API will be available at:
@@ -142,9 +167,9 @@ export default nextConfig
 - Ensure your IP is allowed in Supabase (check project settings)
 
 ### AI features not working
-- Verify `OPENAI_API_KEY` is set in backend `.env`
-- Check OpenAI API quota and billing
-- AI features are optional and the app works without them
+- **Hosted (OpenAI)**: verify `OPENAI_API_KEY` is set in `backend/.env`
+- **Local (Ollama)**: make sure Ollama is running and `OLLAMA_BASE_URL` + `OLLAMA_MODEL` are set
+- AI features are optional; the app works without them
 
 ## Development Workflow
 
