@@ -2,8 +2,9 @@ import os
 import secrets
 import hashlib
 import hmac
-from typing import Optional, Any
-from datetime import datetime
+from typing import Optional, Any, Sequence
+from datetime import datetime, timezone
+from contextlib import asynccontextmanager
 
 import fastapi
 import fastapi.middleware.cors
@@ -12,73 +13,17 @@ import aiosqlite
 
 # from supabase import acreate_client, AsyncClient  # TEMP: disabled while using local SQLite
 
-app = fastapi.FastAPI()
-
-app.add_middleware(
-    fastapi.middleware.cors.CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# -----------------------------
-# TEMP LOCAL DATABASE (SQLite)
-# -----------------------------
-
-DB_PATH = os.environ.get("LOCAL_DB_PATH") or os.path.join(os.path.dirname(__file__), "local.db")
+async def fetchone(
+    conn: aiosqlite.Connection,
+    sql: str,
+    params: Sequence[Any] | None = None,
+) -> aiosqlite.Row | None:
+    async with conn.execute(sql, params or ()) as cur:
+        return await cur.fetchone()
 
 
-async def db() -> aiosqlite.Connection:
-    conn = await aiosqlite.connect(DB_PATH)
-    conn.row_factory = aiosqlite.Row
-    return conn
-
-
-def _now_iso() -> str:
-    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-
-
-def _pbkdf2_hash(password: str, *, salt: bytes) -> str:
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 210_000)
-    return dk.hex()
-
-
-def _hash_password(password: str) -> str:
-    salt = secrets.token_bytes(16)
-    digest = _pbkdf2_hash(password, salt=salt)
-    return f"pbkdf2_sha256${salt.hex()}${digest}"
-
-
-def _verify_password(password: str, stored: str) -> bool:
-    try:
-        algo, salt_hex, digest_hex = stored.split("$", 2)
-        if algo != "pbkdf2_sha256":
-            return False
-        salt = bytes.fromhex(salt_hex)
-        computed = _pbkdf2_hash(password, salt=salt)
-        return hmac.compare_digest(computed, digest_hex)
-    except Exception:
-        return False
-
-
-DEFAULT_CATEGORIES: list[dict[str, Any]] = [
-    # Expenses
-    {"name": "Food", "type": "expense", "icon": "Utensils", "color": "#EF4444"},
-    {"name": "Transport", "type": "expense", "icon": "Car", "color": "#F97316"},
-    {"name": "Shopping", "type": "expense", "icon": "ShoppingBag", "color": "#A855F7"},
-    {"name": "Bills", "type": "expense", "icon": "Receipt", "color": "#3B82F6"},
-    {"name": "Health", "type": "expense", "icon": "HeartPulse", "color": "#22C55E"},
-    {"name": "Entertainment", "type": "expense", "icon": "Film", "color": "#06B6D4"},
-    # Income
-    {"name": "Salary", "type": "income", "icon": "Briefcase", "color": "#22C55E"},
-    {"name": "Bonus", "type": "income", "icon": "Sparkles", "color": "#84CC16"},
-    {"name": "Other Income", "type": "income", "icon": "Plus", "color": "#10B981"},
-]
-
-
-@app.on_event("startup")
-async def _startup():
+@asynccontextmanager
+async def lifespan(_: fastapi.FastAPI):
     async with await db() as conn:
         await conn.executescript(
             """
@@ -159,10 +104,8 @@ async def _startup():
         )
 
         # Seed defaults (shared across all users)
-        existing = await conn.execute_fetchall(
-            "SELECT COUNT(1) AS c FROM categories WHERE is_default = 1"
-        )
-        if (existing[0]["c"] if existing else 0) == 0:
+        existing = await fetchone(conn, "SELECT COUNT(1) AS c FROM categories WHERE is_default = 1")
+        if (existing["c"] if existing else 0) == 0:
             for c in DEFAULT_CATEGORIES:
                 await conn.execute(
                     """
@@ -172,6 +115,73 @@ async def _startup():
                     (secrets.token_hex(16), c["name"], c["type"], c.get("icon"), c.get("color"), _now_iso()),
                 )
         await conn.commit()
+
+    yield
+
+
+app = fastapi.FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    fastapi.middleware.cors.CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# -----------------------------
+# TEMP LOCAL DATABASE (SQLite)
+# -----------------------------
+
+DB_PATH = os.environ.get("LOCAL_DB_PATH") or os.path.join(os.path.dirname(__file__), "local.db")
+
+
+async def db() -> aiosqlite.Connection:
+    conn = await aiosqlite.connect(DB_PATH)
+    conn.row_factory = aiosqlite.Row
+    return conn
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _pbkdf2_hash(password: str, *, salt: bytes) -> str:
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 210_000)
+    return dk.hex()
+
+
+def _hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    digest = _pbkdf2_hash(password, salt=salt)
+    return f"pbkdf2_sha256${salt.hex()}${digest}"
+
+
+def _verify_password(password: str, stored: str) -> bool:
+    try:
+        algo, salt_hex, digest_hex = stored.split("$", 2)
+        if algo != "pbkdf2_sha256":
+            return False
+        salt = bytes.fromhex(salt_hex)
+        computed = _pbkdf2_hash(password, salt=salt)
+        return hmac.compare_digest(computed, digest_hex)
+    except Exception:
+        return False
+
+
+DEFAULT_CATEGORIES: list[dict[str, Any]] = [
+    # Expenses
+    {"name": "Food", "type": "expense", "icon": "Utensils", "color": "#EF4444"},
+    {"name": "Transport", "type": "expense", "icon": "Car", "color": "#F97316"},
+    {"name": "Shopping", "type": "expense", "icon": "ShoppingBag", "color": "#A855F7"},
+    {"name": "Bills", "type": "expense", "icon": "Receipt", "color": "#3B82F6"},
+    {"name": "Health", "type": "expense", "icon": "HeartPulse", "color": "#22C55E"},
+    {"name": "Entertainment", "type": "expense", "icon": "Film", "color": "#06B6D4"},
+    # Income
+    {"name": "Salary", "type": "income", "icon": "Briefcase", "color": "#22C55E"},
+    {"name": "Bonus", "type": "income", "icon": "Sparkles", "color": "#84CC16"},
+    {"name": "Other Income", "type": "income", "icon": "Plus", "color": "#10B981"},
+]
 
 
 # Pydantic models
@@ -244,7 +254,8 @@ async def get_current_user(authorization: str = fastapi.Header(None)):
 
     token = authorization.split(" ", 1)[1].strip()
     async with await db() as conn:
-        row = await conn.execute_fetchone(
+        row = await fetchone(
+            conn,
             """
             SELECT u.id, u.email
             FROM sessions s
@@ -282,7 +293,8 @@ async def auth_signup(data: AuthRequest):
 @app.post("/auth/login")
 async def auth_login(data: AuthRequest):
     async with await db() as conn:
-        row = await conn.execute_fetchone(
+        row = await fetchone(
+            conn,
             "SELECT id, email, password_hash FROM users WHERE email = ?",
             (data.email.lower().strip(),),
         )
@@ -457,7 +469,8 @@ async def update_transaction(
 ):
     updated_at = _now_iso()
     async with await db() as conn:
-        existing = await conn.execute_fetchone(
+        existing = await fetchone(
+            conn,
             "SELECT id FROM transactions WHERE id = ? AND user_id = ?",
             (transaction_id, user["id"]),
         )
@@ -497,7 +510,7 @@ async def update_transaction(
                 )
         await conn.commit()
 
-        row = await conn.execute_fetchone("SELECT * FROM transactions WHERE id = ?", (transaction_id,))
+        row = await fetchone(conn, "SELECT * FROM transactions WHERE id = ?", (transaction_id,))
         return dict(row)
 
 
@@ -672,7 +685,8 @@ async def update_goal(
 ):
     updated_at = _now_iso()
     async with await db() as conn:
-        existing = await conn.execute_fetchone(
+        existing = await fetchone(
+            conn,
             "SELECT id FROM goals WHERE id = ? AND user_id = ?",
             (goal_id, user["id"]),
         )
@@ -687,7 +701,7 @@ async def update_goal(
             (data.name, float(data.target_amount), float(data.current_amount), data.deadline, updated_at, goal_id, user["id"]),
         )
         await conn.commit()
-        row = await conn.execute_fetchone("SELECT * FROM goals WHERE id = ?", (goal_id,))
+        row = await fetchone(conn, "SELECT * FROM goals WHERE id = ?", (goal_id,))
         return dict(row)
 
 
@@ -813,6 +827,12 @@ async def suggest_category(
     user=fastapi.Depends(get_current_user),
 ):
     import openai
+    from openai.types.chat import (
+        ChatCompletionMessageParam,
+        ChatCompletionSystemMessageParam,
+        ChatCompletionUserMessageParam,
+    )
+    from typing import Any, cast
     
     # Get AI Gateway API key if available, otherwise use OpenAI
     api_key = os.environ.get("AI_GATEWAY_API_KEY") or os.environ.get("OPENAI_API_KEY")
@@ -826,19 +846,27 @@ async def suggest_category(
     )
     
     try:
+        system_msg: ChatCompletionSystemMessageParam = {
+            "role": "system",
+            "content": "You are a financial assistant. Based on the transaction description, "
+                       "suggest the most appropriate category. "
+                       "Respond with a JSON object containing: "
+                       "suggestedCategory (string or null), confidence (number 0-1), reasoning (string).",
+        }
+        user_msg: ChatCompletionUserMessageParam = {
+            "role": "user",
+            "content": f"Transaction Type: {data.type}\nDescription: \"{data.description}\"\n"
+                       f"Available Categories: {category_names}\n\n"
+                       f"Choose the most appropriate category from the available list. "
+                       f"If none seem appropriate, return null for suggestedCategory.",
+        }
+        messages: list[ChatCompletionMessageParam] = [system_msg, user_msg]
+        response_format = cast(Any, {"type": "json_object"})
+
         response = await client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a financial assistant. Based on the transaction description, suggest the most appropriate category. Respond with a JSON object containing: suggestedCategory (string or null), confidence (number 0-1), reasoning (string).",
-                },
-                {
-                    "role": "user",
-                    "content": f"Transaction Type: {data.type}\nDescription: \"{data.description}\"\nAvailable Categories: {category_names}\n\nChoose the most appropriate category from the available list. If none seem appropriate, return null for suggestedCategory.",
-                },
-            ],
-            response_format={"type": "json_object"},
+            messages=messages,
+            response_format=response_format,
         )
         
         import json
