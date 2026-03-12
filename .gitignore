@@ -46,10 +46,9 @@ __pycache__/
 *.so
 .Python
 env/
-venv/
+**/.venv/
 ENV/
 env.bak/
-venv.bak/
 *.egg-info/
 dist/
 build/
