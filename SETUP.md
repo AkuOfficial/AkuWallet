@@ -76,13 +76,9 @@ SUPABASE_KEY=your-service-role-key
 # LOCAL_DB_PATH=backend/local.db
 
 # Optional: AI Features (Backend)
-# Option A: Hosted OpenAI-compatible (requires API key)
-# OPENAI_API_KEY=your-openai-api-key
-# OPENAI_MODEL=gpt-4o-mini
-#
-# Option B: Local Ollama (free, no API key)
-# OLLAMA_BASE_URL=http://localhost:11434
-# OLLAMA_MODEL=llama3.1
+# Get a free API key at https://aistudio.google.com/apikey
+# GEMINI_API_KEY=your-gemini-api-key
+# GEMINI_MODEL=gemini-2.0-flash  # optional, defaults to gemini-2.0-flash
 ```
 
 ### Backend env
@@ -175,8 +171,8 @@ export default nextConfig
 - Ensure your IP is allowed in Supabase (check project settings)
 
 ### AI features not working
-- **Hosted (OpenAI)**: verify `OPENAI_API_KEY` is set in `backend/.env`
-- **Local (Ollama)**: make sure Ollama is running and `OLLAMA_BASE_URL` + `OLLAMA_MODEL` are set
+- Verify `GEMINI_API_KEY` is set in `backend/.env`
+- Get a free API key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
 - AI features are optional; the app works without them
 
 ## Development Workflow

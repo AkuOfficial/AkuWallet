@@ -24,7 +24,7 @@ async def fetchone(
 
 @asynccontextmanager
 async def lifespan(_: fastapi.FastAPI):
-    async with await db() as conn:
+    async with db() as conn:
         await conn.executescript(
             """
             PRAGMA journal_mode=WAL;
@@ -136,10 +136,14 @@ app.add_middleware(
 DB_PATH = os.environ.get("LOCAL_DB_PATH") or os.path.join(os.path.dirname(__file__), "local.db")
 
 
-async def db() -> aiosqlite.Connection:
+@asynccontextmanager
+async def db():
     conn = await aiosqlite.connect(DB_PATH)
     conn.row_factory = aiosqlite.Row
-    return conn
+    try:
+        yield conn
+    finally:
+        await conn.close()
 
 
 def _now_iso() -> str:
@@ -241,10 +245,19 @@ class ImportedTransaction(BaseModel):
     date: str
 
 
-class SuggestCategoryRequest(BaseModel):
+class SuggestCategoryItem(BaseModel):
     description: str
     type: str
-    categories: list[dict]
+
+
+class SuggestCategoryCategory(BaseModel):
+    name: str
+    type: str
+
+
+class SuggestCategoryRequest(BaseModel):
+    transactions: list[SuggestCategoryItem]
+    categories: list[SuggestCategoryCategory]
 
 
 # Helper to get user from auth header
@@ -253,11 +266,11 @@ async def get_current_user(authorization: str = fastapi.Header(None)):
         raise fastapi.HTTPException(status_code=401, detail="Not authenticated")
 
     token = authorization.split(" ", 1)[1].strip()
-    async with await db() as conn:
+    async with db() as conn:
         row = await fetchone(
             conn,
             """
-            SELECT u.id, u.email
+            SELECT u.id, u.email, u.created_at
             FROM sessions s
             JOIN users u ON u.id = s.user_id
             WHERE s.token = ?
@@ -266,7 +279,7 @@ async def get_current_user(authorization: str = fastapi.Header(None)):
         )
         if not row:
             raise fastapi.HTTPException(status_code=401, detail="Invalid token")
-        return {"id": row["id"], "email": row["email"]}
+        return {"id": row["id"], "email": row["email"], "created_at": row["created_at"]}
 
 
 class AuthRequest(BaseModel):
@@ -278,7 +291,7 @@ class AuthRequest(BaseModel):
 async def auth_signup(data: AuthRequest):
     user_id = secrets.token_hex(16)
     pw_hash = _hash_password(data.password)
-    async with await db() as conn:
+    async with db() as conn:
         try:
             await conn.execute(
                 "INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
@@ -292,7 +305,7 @@ async def auth_signup(data: AuthRequest):
 
 @app.post("/auth/login")
 async def auth_login(data: AuthRequest):
-    async with await db() as conn:
+    async with db() as conn:
         row = await fetchone(
             conn,
             "SELECT id, email, password_hash FROM users WHERE email = ?",
@@ -354,7 +367,7 @@ async def list_transactions(
     """
     args.extend([limit, offset])
 
-    async with await db() as conn:
+    async with db() as conn:
         rows = await conn.execute_fetchall(sql, tuple(args))
         tx_ids = [r["id"] for r in rows]
 
@@ -417,7 +430,7 @@ async def create_transaction(
 ):
     tx_id = secrets.token_hex(16)
     created_at = _now_iso()
-    async with await db() as conn:
+    async with db() as conn:
         await conn.execute(
             """
             INSERT INTO transactions (
@@ -468,7 +481,7 @@ async def update_transaction(
     user=fastapi.Depends(get_current_user),
 ):
     updated_at = _now_iso()
-    async with await db() as conn:
+    async with db() as conn:
         existing = await fetchone(
             conn,
             "SELECT id FROM transactions WHERE id = ? AND user_id = ?",
@@ -519,7 +532,7 @@ async def delete_transaction(
     transaction_id: str,
     user=fastapi.Depends(get_current_user),
 ):
-    async with await db() as conn:
+    async with db() as conn:
         await conn.execute(
             "DELETE FROM transactions WHERE id = ? AND user_id = ?",
             (transaction_id, user["id"]),
@@ -531,7 +544,7 @@ async def delete_transaction(
 # CATEGORIES
 @app.get("/categories")
 async def list_categories(user=fastapi.Depends(get_current_user)):
-    async with await db() as conn:
+    async with db() as conn:
         rows = await conn.execute_fetchall(
             """
             SELECT * FROM categories
@@ -550,7 +563,7 @@ async def create_category(
 ):
     cat_id = secrets.token_hex(16)
     created_at = _now_iso()
-    async with await db() as conn:
+    async with db() as conn:
         await conn.execute(
             """
             INSERT INTO categories (id, user_id, name, type, icon, color, is_default, created_at)
@@ -576,7 +589,7 @@ async def delete_category(
     category_id: str,
     user=fastapi.Depends(get_current_user),
 ):
-    async with await db() as conn:
+    async with db() as conn:
         await conn.execute(
             """
             DELETE FROM categories
@@ -591,7 +604,7 @@ async def delete_category(
 # TAGS
 @app.get("/tags")
 async def list_tags(user=fastapi.Depends(get_current_user)):
-    async with await db() as conn:
+    async with db() as conn:
         rows = await conn.execute_fetchall(
             "SELECT * FROM tags WHERE user_id = ? ORDER BY name",
             (user["id"],),
@@ -606,7 +619,7 @@ async def create_tag(
 ):
     tag_id = secrets.token_hex(16)
     created_at = _now_iso()
-    async with await db() as conn:
+    async with db() as conn:
         await conn.execute(
             """
             INSERT INTO tags (id, user_id, name, color, created_at)
@@ -629,7 +642,7 @@ async def delete_tag(
     tag_id: str,
     user=fastapi.Depends(get_current_user),
 ):
-    async with await db() as conn:
+    async with db() as conn:
         await conn.execute(
             "DELETE FROM tags WHERE id = ? AND user_id = ?",
             (tag_id, user["id"]),
@@ -641,7 +654,7 @@ async def delete_tag(
 # GOALS
 @app.get("/goals")
 async def list_goals(user=fastapi.Depends(get_current_user)):
-    async with await db() as conn:
+    async with db() as conn:
         rows = await conn.execute_fetchall(
             "SELECT * FROM goals WHERE user_id = ? ORDER BY created_at DESC",
             (user["id"],),
@@ -656,7 +669,7 @@ async def create_goal(
 ):
     goal_id = secrets.token_hex(16)
     created_at = _now_iso()
-    async with await db() as conn:
+    async with db() as conn:
         await conn.execute(
             """
             INSERT INTO goals (id, user_id, name, target_amount, current_amount, deadline, created_at)
@@ -684,7 +697,7 @@ async def update_goal(
     user=fastapi.Depends(get_current_user),
 ):
     updated_at = _now_iso()
-    async with await db() as conn:
+    async with db() as conn:
         existing = await fetchone(
             conn,
             "SELECT id FROM goals WHERE id = ? AND user_id = ?",
@@ -710,7 +723,7 @@ async def delete_goal(
     goal_id: str,
     user=fastapi.Depends(get_current_user),
 ):
-    async with await db() as conn:
+    async with db() as conn:
         await conn.execute(
             "DELETE FROM goals WHERE id = ? AND user_id = ?",
             (goal_id, user["id"]),
@@ -725,7 +738,7 @@ async def import_transactions(
     transactions: list[ImportedTransaction],
     user=fastapi.Depends(get_current_user),
 ):
-    async with await db() as conn:
+    async with db() as conn:
         categories = await conn.execute_fetchall(
             "SELECT * FROM categories WHERE (user_id = ?) OR (is_default = 1)",
             (user["id"],),
@@ -779,7 +792,7 @@ async def get_stats(
         where.append("t.date <= ?")
         args.append(end_date)
 
-    async with await db() as conn:
+    async with db() as conn:
         rows = await conn.execute_fetchall(
             f"""
             SELECT t.type, t.amount, t.date, c.name AS category_name
@@ -826,65 +839,57 @@ async def suggest_category(
     data: SuggestCategoryRequest,
     user=fastapi.Depends(get_current_user),
 ):
-    import openai
-    from openai.types.chat import (
-        ChatCompletionMessageParam,
-        ChatCompletionSystemMessageParam,
-        ChatCompletionUserMessageParam,
-    )
-    from typing import Any, cast
-    
-    # Prefer hosted AI if configured; otherwise allow local Ollama (free, no API key).
-    api_key = os.environ.get("AI_GATEWAY_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    openai_model = os.environ.get("OPENAI_MODEL") or "gpt-4o-mini"
-    ollama_base_url = os.environ.get("OLLAMA_BASE_URL")
-    ollama_model = os.environ.get("OLLAMA_MODEL") or "llama3.1"
+    import json
+    from google import genai
+    from google.genai import types
 
-    if api_key:
-        client = openai.AsyncOpenAI(api_key=api_key)
-        model = openai_model
-        use_response_format = True
-    elif ollama_base_url:
-        base = ollama_base_url.rstrip("/")
-        if not base.endswith("/v1"):
-            base = f"{base}/v1"
-        client = openai.AsyncOpenAI(api_key="ollama", base_url=base)
-        model = ollama_model
-        use_response_format = False
-    else:
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
         raise fastapi.HTTPException(
             status_code=500,
-            detail="AI not configured. Set OPENAI_API_KEY (hosted) or OLLAMA_BASE_URL (local).",
+            detail="AI not configured. Set GEMINI_API_KEY in backend/.env.",
         )
-    
-    category_names = ", ".join(
-        c["name"] for c in data.categories if c["type"] == data.type
-    )
-    
-    try:
-        system_msg: ChatCompletionSystemMessageParam = {
-            "role": "system",
-            "content": "You are a financial assistant. Based on the transaction description, "
-                       "suggest the most appropriate category. "
-                       "Respond with a JSON object containing: "
-                       "suggestedCategory (string or null), confidence (number 0-1), reasoning (string).",
-        }
-        user_msg: ChatCompletionUserMessageParam = {
-            "role": "user",
-            "content": f"Transaction Type: {data.type}\nDescription: \"{data.description}\"\n"
-                       f"Available Categories: {category_names}\n\n"
-                       f"Choose the most appropriate category from the available list. "
-                       f"If none seem appropriate, return null for suggestedCategory.",
-        }
-        messages: list[ChatCompletionMessageParam] = [system_msg, user_msg]
-        create_kwargs: dict[str, Any] = {"model": model, "messages": messages}
-        if use_response_format:
-            create_kwargs["response_format"] = cast(Any, {"type": "json_object"})
 
-        response = await client.chat.completions.create(**create_kwargs)
-        
-        import json
-        result = json.loads(response.choices[0].message.content)
+    model = os.environ.get("GEMINI_MODEL") or "gemini-2.0-flash"
+
+    category_names_by_type: dict[str, str] = {}
+    for tx in data.transactions:
+        if tx.type not in category_names_by_type:
+            category_names_by_type[tx.type] = ", ".join(
+                c.name for c in data.categories if c.type == tx.type
+            )
+
+    tx_lines = "\n".join(
+        f"{i+1}. type={tx.type}, description=\"{tx.description}\""
+        for i, tx in enumerate(data.transactions)
+    )
+
+    category_info = "\n".join(
+        f"  {t}: {names}" for t, names in category_names_by_type.items()
+    )
+
+    prompt = (
+        f"You are a financial assistant. Categorize each transaction below.\n"
+        f"Available categories by type:\n{category_info}\n\n"
+        f"Transactions:\n{tx_lines}\n\n"
+        f"Respond with a JSON array with one object per transaction (same order), each containing: "
+        f"suggestedCategory (string or null), confidence (number 0-1), reasoning (string). "
+        f"Only use categories from the available list. If none fit, use null."
+    )
+
+    try:
+        client = genai.Client(api_key=api_key)
+        response = await client.aio.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+            ),
+        )
+        result = json.loads(response.text)
+        # Normalise: always return a list
+        if isinstance(result, dict):
+            result = [result]
         return result
     except Exception as e:
         raise fastapi.HTTPException(status_code=500, detail=str(e))

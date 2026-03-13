@@ -9,18 +9,13 @@ import type {
 } from '@/lib/types'
 
 async function getAuthHeader(): Promise<Record<string, string>> {
-  // const supabase = createClient()
-  // const { data: { session } } = await supabase.auth.getSession()
-  // if (!session?.access_token) throw new Error('Not authenticated')
-  // return { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }
-
   let token: string | undefined
   if (typeof window !== 'undefined') {
     const match = document.cookie.match(/(?:^|;\s*)aku_token=([^;]+)/)
     token = match ? decodeURIComponent(match[1]) : undefined
   } else {
     const { cookies } = await import('next/headers')
-    token = cookies().get('aku_token')?.value
+    token = (await cookies()).get('aku_token')?.value
   }
 
   if (!token) throw new Error('Not authenticated')
@@ -37,7 +32,12 @@ async function apiRequest<T>(
 ): Promise<T> {
   const headers = await getAuthHeader()
   
-  const response = await fetch(`/api${endpoint}`, {
+  // Use absolute URL on server, relative URL in browser
+  const baseUrl = typeof window === 'undefined' 
+    ? (process.env.BACKEND_URL || 'http://localhost:8000')
+    : '/api'
+  
+  const response = await fetch(`${baseUrl}${endpoint}`, {
     ...options,
     headers: {
       ...headers,
@@ -227,14 +227,9 @@ export async function getStats(params?: {
 
 // AI Suggest Category
 export async function suggestCategory(data: {
-  description: string
-  type: TransactionType
+  transactions: { description: string; type: TransactionType }[]
   categories: Category[]
-}): Promise<{
-  suggestedCategory: string | null
-  confidence: number
-  reasoning: string
-}> {
+}): Promise<{ suggestedCategory: string | null; confidence: number; reasoning: string }[]> {
   return apiRequest('/suggest-category', {
     method: 'POST',
     body: JSON.stringify(data),

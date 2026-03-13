@@ -13,10 +13,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Upload, FileJson, FileSpreadsheet, CheckCircle2, XCircle, Loader2, AlertCircle } from 'lucide-react'
+import { Upload, FileJson, FileSpreadsheet, CheckCircle2, XCircle, Loader2, AlertCircle, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
-import { importTransactions as apiImportTransactions } from '@/lib/api'
-import type { ImportedTransaction, TransactionType } from '@/lib/types'
+import { importTransactions as apiImportTransactions, suggestCategory, getCategories } from '@/lib/api'
+import type { ImportedTransaction, TransactionType, Category } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 type ImportStep = 'upload' | 'preview' | 'result'
@@ -34,6 +34,7 @@ export function ImportTransactions() {
   const [error, setError] = useState<string | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [isCategorizingAI, setIsCategorizingAI] = useState(false)
 
   const parseCSV = (content: string): ImportedTransaction[] => {
     const lines = content.trim().split('\n')
@@ -141,6 +142,26 @@ export function ImportTransactions() {
     const file = e.target.files?.[0]
     if (file) {
       handleFile(file)
+    }
+  }
+
+  const handleAICategorize = async () => {
+    setIsCategorizingAI(true)
+    try {
+      const categories: Category[] = await getCategories()
+      const suggestions = await suggestCategory({
+        transactions: parsedTransactions.map(tx => ({ description: tx.description || '', type: tx.type })),
+        categories,
+      })
+      setParsedTransactions(prev => prev.map((tx, i) => ({
+        ...tx,
+        category: suggestions[i]?.suggestedCategory ?? tx.category,
+      })))
+      toast.success('AI categorization complete')
+    } catch {
+      toast.error('AI categorization failed')
+    } finally {
+      setIsCategorizingAI(false)
     }
   }
 
@@ -274,7 +295,14 @@ export function ImportTransactions() {
               <Button variant="outline" onClick={handleReset}>
                 Cancel
               </Button>
-              <Button onClick={handleImport} disabled={isPending}>
+              <Button variant="outline" onClick={handleAICategorize} disabled={isCategorizingAI || isPending}>
+                {isCategorizingAI ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Categorizing...</>
+                ) : (
+                  <><Sparkles className="mr-2 h-4 w-4" />AI Categorize</>
+                )}
+              </Button>
+              <Button onClick={handleImport} disabled={isPending || isCategorizingAI}>
                 {isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

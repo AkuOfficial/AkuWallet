@@ -5,11 +5,10 @@ import { Badge } from '@/components/ui/badge'
 import { User, Folder, Tag } from 'lucide-react'
 import { ManageCategoriesDialog } from '@/components/manage-categories-dialog'
 import { ManageTagsDialog } from '@/components/manage-tags-dialog'
-import type { User as SupabaseUser } from '@supabase/supabase-js'
 import type { Category, Tag as TagType } from '@/lib/types'
 
 interface SettingsFormProps {
-  user: SupabaseUser
+  user: { email?: string; created_at?: string | null }
   categories: Category[]
   tags: TagType[]
 }
@@ -36,11 +35,13 @@ export function SettingsForm({ user, categories, tags }: SettingsFormProps) {
           <div>
             <label className="text-sm font-medium text-muted-foreground">Account Created</label>
             <p className="mt-1 text-foreground">
-              {new Date(user.created_at).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
+              {user.created_at
+                ? new Date(user.created_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })
+                : '—'}
             </p>
           </div>
         </CardContent>

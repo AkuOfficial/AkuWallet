@@ -73,17 +73,16 @@ export function QuickAddTransaction({ categories, tags, onSuccess }: QuickAddTra
 
   const handleAISuggest = async () => {
     if (!description.trim()) return
-    
     setIsSuggesting(true)
     try {
-      const data = await suggestCategory({ description, type, categories })
-      if (data.suggestedCategory) {
-        const matchedCategory = filteredCategories.find(
-          c => c.name.toLowerCase() === data.suggestedCategory!.toLowerCase()
+      const [result] = await suggestCategory({ transactions: [{ description, type }], categories })
+      if (result.suggestedCategory) {
+        const matched = filteredCategories.find(
+          c => c.name.toLowerCase() === result.suggestedCategory!.toLowerCase()
         )
-        if (matchedCategory) {
-          setCategoryId(matchedCategory.id)
-          setSuggestedCategoryName(data.suggestedCategory)
+        if (matched) {
+          setCategoryId(matched.id)
+          setSuggestedCategoryName(result.suggestedCategory)
         }
       }
     } catch (error) {
