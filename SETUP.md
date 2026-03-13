@@ -44,8 +44,8 @@ This project supports two backend database modes.
 ### Option 1 (Supabase)
 
 1. In your Supabase project, go to the SQL Editor
-2. Open and run `scripts/001_create_wallet_tables.sql`
-3. Then run `scripts/002_seed_default_categories.sql`
+2. Open and run `frontend/scripts/001_create_wallet_tables.sql`
+3. Then run `frontend/scripts/002_seed_default_categories.sql`
 
 ### Option 2 (SQLite)
 
@@ -55,12 +55,17 @@ For Supabase, these scripts will create all necessary tables and seed default ca
 
 ## Step 4: Configure Environment Variables
 
-Create a `.env.local` file in the root directory:
+### Frontend env
+
+Create a `frontend/.env.local` file:
 
 ```env
 # Supabase Configuration (Frontend)
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+# Optional: override backend API URL for the frontend proxy and server-side calls
+# BACKEND_URL=http://localhost:8000
 
 # Backend Configuration (create a .env file in the backend directory)
 # Option 1: Supabase (Backend)
@@ -80,16 +85,21 @@ SUPABASE_KEY=your-service-role-key
 # OLLAMA_MODEL=llama3.1
 ```
 
-Also create `backend/.env` with the backend variables.
+### Backend env
+
+Create `backend/.env` with the backend variables you need (SQLite needs none by default).
 
 ## Step 5: Install Frontend Dependencies
 
 ```bash
-# Install dependencies
+# From the repo root (recommended): installs workspace deps and runs the Next.js app in ./frontend
 mise x pnpm -- pnpm install
-
-# Start the development server
 mise x pnpm -- pnpm dev
+
+# Or run directly from the frontend folder:
+# cd frontend
+# mise x pnpm -- pnpm install
+# mise x pnpm -- pnpm dev
 ```
 
 The frontend will be available at `http://localhost:3000`
@@ -121,7 +131,7 @@ The API will be available at:
 
 ## Step 8: Configure API Proxy (Optional)
 
-If you want the frontend to proxy API requests, update `next.config.mjs`:
+If you want the frontend to proxy API requests, update `frontend/next.config.mjs`:
 
 ```javascript
 /** @type {import('next').NextConfig} */
@@ -152,7 +162,7 @@ export default nextConfig
 ### Frontend won't start
 - Make sure all dependencies are installed: `pnpm install`
 - Check if port 3000 is available
-- Clear `.next` folder: `rm -rf .next`
+- Clear Next build cache: delete `frontend/.next`
 
 ### Backend won't start
 - Verify Python version: `python --version` (should be 3.12+)
@@ -205,13 +215,9 @@ mypy main.py
 
 ```
 AkuWallet/
-├── app/                    # Next.js pages and layouts
-├── components/             # React components
-├── lib/                    # Utilities and API client
 ├── backend/                # Python FastAPI backend
-├── scripts/                # Database migrations
-├── public/                 # Static assets
-└── styles/                 # Global styles
+├── frontend/               # Next.js frontend (app, components, lib, public, styles, config)
+└── scripts/                # (optional) project-level scripts/tools
 ```
 
 ## Next Steps
