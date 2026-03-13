@@ -11,6 +11,7 @@ Before you begin, ensure you have the following installed:
 - **Python** 3.14.3
 - **uv** 0.10.9
 - **Git**
+- **mise**
 
 ## Step 1: Clone the Repository
 
@@ -85,10 +86,10 @@ Also create `backend/.env` with the backend variables.
 
 ```bash
 # Install dependencies
-pnpm install
+mise x pnpm -- pnpm install
 
 # Start the development server
-pnpm dev
+mise x pnpm -- pnpm dev
 ```
 
 The frontend will be available at `http://localhost:3000`
@@ -99,11 +100,8 @@ The frontend will be available at `http://localhost:3000`
 # Navigate to backend directory
 cd backend
 
-# Create a virtual environment (.venv) and install with uv
-uv venv
-
-# Install Python dependencies (editable)
-uv pip install -e .
+# Install Python dependencies
+mise x uv -- uv sync 
 ```
 
 ## Step 7: Start the Backend Server
@@ -113,7 +111,7 @@ uv pip install -e .
 cd backend
 
 # Start FastAPI development server
-uv run fastapi dev main.py
+mise x uv -- uv run fastapi dev main.py
 ```
 
 The API will be available at:

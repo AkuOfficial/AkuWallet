@@ -11,7 +11,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import {
   Wallet,
@@ -35,11 +34,10 @@ const navigation = [
 export function DashboardNav({ userEmail }: { userEmail: string }) {
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = createClient()
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/')
+    document.cookie = 'aku_token=; Path=/; Max-Age=0; SameSite=Lax'
+    router.push('/auth/login')
   }
 
   return (
