@@ -7,8 +7,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { User, Folder, Tag, KeyRound } from 'lucide-react'
-import { ManageCategoriesDialog } from '@/components/manage-categories-dialog'
-import { ManageTagsDialog } from '@/components/manage-tags-dialog'
+import dynamic from 'next/dynamic'
+
+const ManageCategoriesDialog = dynamic(
+  () => import('@/components/manage-categories-dialog').then(m => m.ManageCategoriesDialog),
+  { ssr: false }
+)
+const ManageTagsDialog = dynamic(
+  () => import('@/components/manage-tags-dialog').then(m => m.ManageTagsDialog),
+  { ssr: false }
+)
 import { changePassword } from '@/lib/api'
 import { toast } from 'sonner'
 import type { Category, Tag as TagType } from '@/lib/types'
