@@ -225,6 +225,17 @@ export async function getStats(params?: {
   return apiRequest(`/stats${query ? `?${query}` : ''}`)
 }
 
+// Auth
+export async function changePassword(data: {
+  current_password: string
+  new_password: string
+}): Promise<{ success: boolean }> {
+  return apiRequest('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
 // AI Suggest Category
 export async function suggestCategory(data: {
   transactions: { description: string; type: TransactionType }[]

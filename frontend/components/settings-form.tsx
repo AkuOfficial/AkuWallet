@@ -1,10 +1,16 @@
 'use client'
 
+import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { User, Folder, Tag } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { User, Folder, Tag, KeyRound } from 'lucide-react'
 import { ManageCategoriesDialog } from '@/components/manage-categories-dialog'
 import { ManageTagsDialog } from '@/components/manage-tags-dialog'
+import { changePassword } from '@/lib/api'
+import { toast } from 'sonner'
 import type { Category, Tag as TagType } from '@/lib/types'
 
 interface SettingsFormProps {
@@ -14,8 +20,36 @@ interface SettingsFormProps {
 }
 
 export function SettingsForm({ user, categories, tags }: SettingsFormProps) {
-  const userCategories = categories.filter(c => !c.is_default)
-  const defaultCategories = categories.filter(c => c.is_default)
+  const [localCategories, setLocalCategories] = useState<Category[]>(categories)
+  const [localTags, setLocalTags] = useState<TagType[]>(tags)
+
+  const userCategories = localCategories.filter(c => !c.is_default)
+  const defaultCategories = localCategories.filter(c => c.is_default)
+
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [isChanging, setIsChanging] = useState(false)
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (newPassword !== confirmPassword) {
+      toast.error('New passwords do not match')
+      return
+    }
+    setIsChanging(true)
+    try {
+      await changePassword({ current_password: currentPassword, new_password: newPassword })
+      toast.success('Password changed successfully')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to change password')
+    } finally {
+      setIsChanging(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -48,6 +82,53 @@ export function SettingsForm({ user, categories, tags }: SettingsFormProps) {
       </Card>
 
       <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <KeyRound className="h-4 w-4" />
+            Change Password
+          </CardTitle>
+          <CardDescription>Update your account password</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Current Password</Label>
+              <Input
+                id="current-password"
+                type="password"
+                required
+                value={currentPassword}
+                onChange={e => setCurrentPassword(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                required
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm New Password</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                required
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+              />
+            </div>
+            <Button type="submit" disabled={isChanging}>
+              {isChanging ? 'Updating...' : 'Update Password'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -58,7 +139,10 @@ export function SettingsForm({ user, categories, tags }: SettingsFormProps) {
               {userCategories.length} custom, {defaultCategories.length} default
             </CardDescription>
           </div>
-          <ManageCategoriesDialog categories={categories} />
+          <ManageCategoriesDialog
+            categories={localCategories}
+            onSuccess={(updated) => updated && setLocalCategories(updated)}
+          />
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -102,15 +186,18 @@ export function SettingsForm({ user, categories, tags }: SettingsFormProps) {
               Tags
             </CardTitle>
             <CardDescription>
-              {tags.length} tag{tags.length !== 1 ? 's' : ''} created
+              {localTags.length} tag{localTags.length !== 1 ? 's' : ''} created
             </CardDescription>
           </div>
-          <ManageTagsDialog tags={tags} />
+          <ManageTagsDialog
+            tags={localTags}
+            onSuccess={(updated) => updated && setLocalTags(updated)}
+          />
         </CardHeader>
         <CardContent>
-          {tags.length > 0 ? (
+          {localTags.length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {tags.map((tag) => (
+              {localTags.map((tag) => (
                 <Badge key={tag.id} variant="outline" className="gap-1">
                   <div
                     className="h-2 w-2 rounded-full"

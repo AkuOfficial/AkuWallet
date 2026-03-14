@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils'
 
 interface ManageCategoriesDialogProps {
   categories: Category[]
-  onSuccess?: () => void
+  onSuccess?: (updated?: Category[]) => void
 }
 
 export function ManageCategoriesDialog({ categories, onSuccess }: ManageCategoriesDialogProps) {
@@ -37,24 +37,22 @@ export function ManageCategoriesDialog({ categories, onSuccess }: ManageCategori
   const [type, setType] = useState<TransactionType>('expense')
   const [color, setColor] = useState('#4f46e5')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [localCategories, setLocalCategories] = useState<Category[]>(categories)
 
-  const userCategories = categories.filter(c => !c.is_default)
-  const defaultCategories = categories.filter(c => c.is_default)
+  const userCategories = localCategories.filter(c => !c.is_default)
+  const defaultCategories = localCategories.filter(c => c.is_default)
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsPending(true)
     
     try {
-      await createCategory({
-        name,
-        type,
-        color,
-      })
-      
+      const created = await createCategory({ name, type, color })
+      const updated = [...localCategories, created]
+      setLocalCategories(updated)
       toast.success('Category added successfully')
       setName('')
-      onSuccess?.()
+      onSuccess?.(updated)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to add category')
     } finally {
@@ -66,8 +64,10 @@ export function ManageCategoriesDialog({ categories, onSuccess }: ManageCategori
     setDeletingId(id)
     try {
       await deleteCategory(id)
+      const updated = localCategories.filter(c => c.id !== id)
+      setLocalCategories(updated)
       toast.success('Category deleted successfully')
-      onSuccess?.()
+      onSuccess?.(updated)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to delete category')
     } finally {

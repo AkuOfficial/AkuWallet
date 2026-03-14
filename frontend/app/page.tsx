@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Card, CardContent } from '@/components/ui/card'
 import { 
   Wallet, 
@@ -22,6 +23,7 @@ export default function HomePage() {
             <span className="text-xl font-semibold text-foreground">Wallet</span>
           </div>
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <Button variant="ghost" asChild>
               <Link href="/auth/login">Log in</Link>
             </Button>

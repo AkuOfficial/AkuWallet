@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 
 interface ManageTagsDialogProps {
   tags: Tag[]
-  onSuccess?: () => void
+  onSuccess?: (updated?: Tag[]) => void
 }
 
 export function ManageTagsDialog({ tags, onSuccess }: ManageTagsDialogProps) {
@@ -28,20 +28,19 @@ export function ManageTagsDialog({ tags, onSuccess }: ManageTagsDialogProps) {
   const [name, setName] = useState('')
   const [color, setColor] = useState('#4f46e5')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [localTags, setLocalTags] = useState<Tag[]>(tags)
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsPending(true)
     
     try {
-      await createTag({
-        name,
-        color,
-      })
-      
+      const created = await createTag({ name, color })
+      const updated = [...localTags, created]
+      setLocalTags(updated)
       toast.success('Tag added successfully')
       setName('')
-      onSuccess?.()
+      onSuccess?.(updated)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to add tag')
     } finally {
@@ -53,8 +52,10 @@ export function ManageTagsDialog({ tags, onSuccess }: ManageTagsDialogProps) {
     setDeletingId(id)
     try {
       await deleteTag(id)
+      const updated = localTags.filter(t => t.id !== id)
+      setLocalTags(updated)
       toast.success('Tag deleted successfully')
-      onSuccess?.()
+      onSuccess?.(updated)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to delete tag')
     } finally {
@@ -120,11 +121,11 @@ export function ManageTagsDialog({ tags, onSuccess }: ManageTagsDialogProps) {
           </Button>
         </form>
 
-        {tags.length > 0 ? (
+        {localTags.length > 0 ? (
           <div className="space-y-2">
             <Label className="text-sm text-muted-foreground">Your Tags</Label>
             <div className="space-y-2">
-              {tags.map((tag) => (
+              {localTags.map((tag) => (
                 <div
                   key={tag.id}
                   className="flex items-center justify-between rounded-lg border border-border p-3"

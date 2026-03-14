@@ -22,6 +22,7 @@ import {
   User,
   LogOut,
 } from 'lucide-react'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 const navigation = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
@@ -72,7 +73,9 @@ export function DashboardNav({ userEmail }: { userEmail: string }) {
           </nav>
         </div>
 
-        <DropdownMenu>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="gap-2">
               <User className="h-4 w-4" />
@@ -92,7 +95,8 @@ export function DashboardNav({ userEmail }: { userEmail: string }) {
               Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Mobile navigation */}
