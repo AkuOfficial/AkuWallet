@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(timezone.utc).replace(microsecond=0).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 def _pbkdf2_hash(password: str, *, salt: bytes) -> str:

@@ -70,4 +70,6 @@ ehthumbs.db
 Desktop.ini
 
 # DB
-**/local.db
+**/*.db
+**/*.db-wal
+**/*.db-shm
