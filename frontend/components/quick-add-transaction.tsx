@@ -121,10 +121,16 @@ export function QuickAddTransaction({ categories, tags, onSuccess }: QuickAddTra
             setSuggestedCategoryName(null)
           }}>
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="expense" className="data-[state=active]:bg-expense/10 data-[state=active]:text-expense">
+              <TabsTrigger
+                value="expense"
+                className="data-[state=active]:bg-red-500/15 data-[state=active]:text-red-500 dark:data-[state=active]:bg-red-500/20 dark:data-[state=active]:text-red-400"
+              >
                 Expense
               </TabsTrigger>
-              <TabsTrigger value="income" className="data-[state=active]:bg-income/10 data-[state=active]:text-income">
+              <TabsTrigger
+                value="income"
+                className="data-[state=active]:bg-emerald-500/15 data-[state=active]:text-emerald-600 dark:data-[state=active]:bg-emerald-500/20 dark:data-[state=active]:text-emerald-400"
+              >
                 Income
               </TabsTrigger>
             </TabsList>
