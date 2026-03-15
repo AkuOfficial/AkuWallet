@@ -23,7 +23,7 @@ async def suggest_category(
             detail="AI not configured. Set GEMINI_API_KEY in backend/.env.",
         )
 
-    model = os.environ.get("GEMINI_MODEL") or "gemini-2.0-flash"
+    model = os.environ.get("GEMINI_MODEL") or "models/gemini-2.5-flash"
 
     category_names_by_type: dict[str, str] = {}
     for tx in data.transactions:

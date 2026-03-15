@@ -13,6 +13,7 @@ DEFAULT_CATEGORIES: list[dict[str, Any]] = [
     {"name": "Bills", "type": "expense", "icon": "Receipt", "color": "#3B82F6"},
     {"name": "Health", "type": "expense", "icon": "HeartPulse", "color": "#22C55E"},
     {"name": "Entertainment", "type": "expense", "icon": "Film", "color": "#06B6D4"},
+    {"name": "Other Expense", "type": "expense", "icon": "CircleEllipsis", "color": "#71717A"},
     {"name": "Salary", "type": "income", "icon": "Briefcase", "color": "#22C55E"},
     {"name": "Bonus", "type": "income", "icon": "Sparkles", "color": "#84CC16"},
     {"name": "Other Income", "type": "income", "icon": "Plus", "color": "#10B981"},

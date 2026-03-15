@@ -1,6 +1,9 @@
 from contextlib import asynccontextmanager
 
+import dotenv
 import fastapi
+
+dotenv.load_dotenv()
 import fastapi.middleware.cors
 
 from database import db, migrate

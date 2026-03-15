@@ -9,4 +9,5 @@ dependencies = [
     "pydantic==2.12.5",
     "google-genai>=1.17.0",
     "aiosqlite==0.22.1",
+    "python-dotenv>=1.0.0",
 ]

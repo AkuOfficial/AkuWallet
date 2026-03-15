@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,6 +27,7 @@ interface QuickAddTransactionProps {
 }
 
 export function QuickAddTransaction({ categories, tags, onSuccess }: QuickAddTransactionProps & { onSuccess?: () => void }) {
+  const router = useRouter()
   const [isPending, setIsPending] = useState(false)
   const [type, setType] = useState<TransactionType>('expense')
   const [amount, setAmount] = useState('')
@@ -63,6 +65,7 @@ export function QuickAddTransaction({ categories, tags, onSuccess }: QuickAddTra
       setRecurrence('none')
       setSelectedTags([])
       setSuggestedCategoryName(null)
+      router.refresh()
       onSuccess?.()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to add transaction')
@@ -76,14 +79,15 @@ export function QuickAddTransaction({ categories, tags, onSuccess }: QuickAddTra
     setIsSuggesting(true)
     try {
       const [result] = await suggestCategory({ transactions: [{ description, type }], categories })
-      if (result.suggestedCategory) {
-        const matched = filteredCategories.find(
-          c => c.name.toLowerCase() === result.suggestedCategory!.toLowerCase()
-        )
-        if (matched) {
-          setCategoryId(matched.id)
-          setSuggestedCategoryName(result.suggestedCategory)
-        }
+      const fallbackName = type === 'expense' ? 'Other Expense' : 'Other Income'
+      const matched = result.suggestedCategory
+        ? filteredCategories.find(c => c.name.toLowerCase() === result.suggestedCategory!.toLowerCase())
+        : undefined
+      const target = matched ?? filteredCategories.find(c => c.name === fallbackName)
+      if (target) {
+        setCategoryId(target.id)
+        setSuggestedCategoryName(target.name)
+        if (!matched) toast.info(`AI couldn't categorize this, set to "${fallbackName}"`)
       }
     } catch (error) {
       console.error('Failed to get AI suggestion:', error)
@@ -190,7 +194,7 @@ export function QuickAddTransaction({ categories, tags, onSuccess }: QuickAddTra
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
-              <Select value={categoryId} onValueChange={setCategoryId}>
+              <Select key={categoryId} value={categoryId} onValueChange={setCategoryId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
