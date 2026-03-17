@@ -7,16 +7,28 @@ import aiosqlite
 DB_PATH = os.environ.get("LOCAL_DB_PATH") or os.path.join(os.path.dirname(__file__), "local.db")
 
 DEFAULT_CATEGORIES: list[dict[str, Any]] = [
-    {"name": "Food", "type": "expense", "icon": "Utensils", "color": "#EF4444"},
-    {"name": "Transport", "type": "expense", "icon": "Car", "color": "#F97316"},
+    # Expense
+    {"name": "Food & Dining", "type": "expense", "icon": "Utensils", "color": "#EF4444"},
+    {"name": "Groceries", "type": "expense", "icon": "ShoppingCart", "color": "#F97316"},
+    {"name": "Transport", "type": "expense", "icon": "Car", "color": "#F59E0B"},
     {"name": "Shopping", "type": "expense", "icon": "ShoppingBag", "color": "#A855F7"},
-    {"name": "Bills", "type": "expense", "icon": "Receipt", "color": "#3B82F6"},
-    {"name": "Health", "type": "expense", "icon": "HeartPulse", "color": "#22C55E"},
+    {"name": "Bills & Utilities", "type": "expense", "icon": "Receipt", "color": "#3B82F6"},
+    {"name": "Health", "type": "expense", "icon": "HeartPulse", "color": "#EC4899"},
     {"name": "Entertainment", "type": "expense", "icon": "Film", "color": "#06B6D4"},
-    {"name": "Other Expense", "type": "expense", "icon": "CircleEllipsis", "color": "#71717A"},
+    {"name": "Education", "type": "expense", "icon": "GraduationCap", "color": "#6366F1"},
+    {"name": "Travel", "type": "expense", "icon": "Plane", "color": "#14B8A6"},
+    {"name": "Personal Care", "type": "expense", "icon": "Sparkles", "color": "#F472B6"},
+    {"name": "Home", "type": "expense", "icon": "Home", "color": "#84CC16"},
+    {"name": "Subscriptions", "type": "expense", "icon": "RefreshCw", "color": "#8B5CF6"},
+    # Income
     {"name": "Salary", "type": "income", "icon": "Briefcase", "color": "#22C55E"},
-    {"name": "Bonus", "type": "income", "icon": "Sparkles", "color": "#84CC16"},
-    {"name": "Other Income", "type": "income", "icon": "Plus", "color": "#10B981"},
+    {"name": "Freelance", "type": "income", "icon": "Laptop", "color": "#3B82F6"},
+    {"name": "Business", "type": "income", "icon": "Building2", "color": "#F97316"},
+    {"name": "Investments", "type": "income", "icon": "TrendingUp", "color": "#14B8A6"},
+    {"name": "Rental Income", "type": "income", "icon": "Home", "color": "#84CC16"},
+    {"name": "Bonus", "type": "income", "icon": "Star", "color": "#EAB308"},
+    {"name": "Gifts", "type": "income", "icon": "Gift", "color": "#EC4899"},
+    {"name": "Refunds", "type": "income", "icon": "RotateCcw", "color": "#8B5CF6"},
 ]
 
 
