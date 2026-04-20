@@ -89,8 +89,8 @@ Create `backend/.env` with the backend variables you need (SQLite needs none by 
 
 ```bash
 # From the repo root (recommended): installs workspace deps and runs the Next.js app in ./frontend
-mise x pnpm -- pnpm install
-mise x pnpm -- pnpm dev
+pnpm install
+pnpm dev
 
 # Or run directly from the frontend folder:
 # cd frontend
@@ -107,7 +107,7 @@ The frontend will be available at `http://localhost:3000`
 cd backend
 
 # Install Python dependencies
-mise x uv -- uv sync 
+uv sync 
 ```
 
 ## Step 7: Start the Backend Server
@@ -117,7 +117,7 @@ mise x uv -- uv sync
 cd backend
 
 # Start FastAPI development server
-mise x uv -- uv run fastapi dev main.py
+uv run fastapi dev main.py
 ```
 
 The API will be available at:
