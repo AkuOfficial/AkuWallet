@@ -1,12 +1,17 @@
 'use client'
 
-import { useMemo, useEffect, useState } from 'react'
+import { useMemo, useEffect, useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { TrendingUp, TrendingDown, Wallet, Receipt } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Receipt } from 'lucide-react'
 import type { Transaction } from '@/lib/types'
+import { useFilters } from '@/lib/contexts/filter-context'
 import {
-  PieChart, Pie, Cell, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
+  PieChart, Pie, Cell, ResponsiveContainer, Sector,
+  AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
+  BarChart, Bar,
   TooltipProps,
 } from 'recharts'
 
@@ -52,6 +57,12 @@ function PieTooltip({ active, payload }: TooltipProps<number, string>) {
 
 export function DashboardOverview({ transactions }: DashboardOverviewProps) {
   const [tickColor, setTickColor] = useState('#888')
+  const { timeSpan, accountIds } = useFilters()
+  const [cashFlowRows, setCashFlowRows] = useState<Array<{ date: string; income: number; expense: number }>>([])
+  const [netWorthRows, setNetWorthRows] = useState<Array<{ date: string; net_worth: number }>>([])
+  const [baseCurrency, setBaseCurrency] = useState<string>('USD')
+  const [statsData, setStatsData] = useState<{ totalIncome: number; totalExpenses: number; balance: number; transactionCount: number } | null>(null)
+  const [categoryBreakdown, setCategoryBreakdown] = useState<{ expense: Record<string, number>; income: Record<string, number> }>({ expense: {}, income: {} })
 
   useEffect(() => {
     const update = () => {
@@ -64,190 +75,527 @@ export function DashboardOverview({ transactions }: DashboardOverviewProps) {
     return () => observer.disconnect()
   }, [])
 
-  const stats = useMemo(() => {
-    const now = new Date()
-    const thisMonth = transactions.filter(t => {
-      const d = new Date(t.date)
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
-    })
-    const totalIncome = thisMonth.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-    const totalExpenses = thisMonth.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-    return { totalIncome, totalExpenses, balance: totalIncome - totalExpenses, transactionCount: thisMonth.length }
-  }, [transactions])
+  const getTokenFromCookie = () => {
+    if (typeof document === 'undefined') return null
+    const match = document.cookie.match(/(?:^|;\s*)aku_token=([^;]+)/)
+    return match ? decodeURIComponent(match[1]) : null
+  }
 
-  const categoryBreakdown = useMemo(() => {
+  const range = useMemo(() => {
     const now = new Date()
-    const thisMonth = transactions.filter(t => {
-      const d = new Date(t.date)
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && t.type === 'expense'
-    })
-    const byCategory = thisMonth.reduce((acc, t) => {
-      const name = t.category?.name || 'Uncategorized'
-      acc[name] = (acc[name] || 0) + t.amount
-      return acc
-    }, {} as Record<string, number>)
-    return Object.entries(byCategory)
-      .map(([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6)
-  }, [transactions])
+    // Use local calendar date to avoid UTC day-shift (toISOString() can move date by 1 day in non-UTC timezones)
+    const iso = (d: Date) => {
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    }
+    const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1)
+    const endOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0)
 
-  const monthlyData = useMemo(() => {
-    const now = new Date()
-    return Array.from({ length: 6 }, (_, i) => {
-      const date = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
-      const month = date.toLocaleDateString('en-US', { month: 'short' })
-      const monthTx = transactions.filter(t => {
-        const d = new Date(t.date)
-        return d.getMonth() === date.getMonth() && d.getFullYear() === date.getFullYear()
-      })
-      return {
-        month,
-        Income: monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0),
-        Expenses: monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0),
+    switch (timeSpan) {
+      case 'current_month': {
+        const s = startOfMonth(now)
+        const e = endOfMonth(now)
+        return { start: iso(s), end: iso(e), granularity: 'day' as const }
       }
-    })
-  }, [transactions])
+      case 'last_month': {
+        const d = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        const s = startOfMonth(d)
+        const e = endOfMonth(d)
+        return { start: iso(s), end: iso(e), granularity: 'day' as const }
+      }
+      case 'last_6_months': {
+        const s = new Date(now.getFullYear(), now.getMonth() - 5, 1)
+        const e = endOfMonth(now)
+        return { start: iso(s), end: iso(e), granularity: 'month' as const }
+      }
+      case 'last_year': {
+        const s = new Date(now.getFullYear() - 1, now.getMonth(), 1)
+        const e = endOfMonth(now)
+        return { start: iso(s), end: iso(e), granularity: 'month' as const }
+      }
+      case 'max': {
+        return { start: undefined, end: undefined, granularity: 'month' as const }
+      }
+      default: {
+        const s = startOfMonth(now)
+        const e = endOfMonth(now)
+        return { start: iso(s), end: iso(e), granularity: 'day' as const }
+      }
+    }
+  }, [timeSpan])
+
+  useEffect(() => {
+    const token = getTokenFromCookie()
+    const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+    const params = new URLSearchParams()
+    if (range.start) params.set('start_date', range.start)
+    if (range.end) params.set('end_date', range.end)
+    if (accountIds.length > 0) params.set('account_ids', accountIds.join(','))
+
+    fetch(`/api/stats${params.toString() ? `?${params.toString()}` : ''}`, { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.base_currency) setBaseCurrency(data.base_currency)
+        setStatsData({
+          totalIncome: data?.total_income ?? 0,
+          totalExpenses: data?.total_expense ?? 0,
+          balance: data?.balance ?? 0,
+          transactionCount: data?.transaction_count ?? 0,
+        })
+        setCategoryBreakdown({
+          expense: data?.expense_by_category ?? {},
+          income: data?.income_by_category ?? {},
+        })
+        const by = (data?.by_date ?? {}) as Record<string, { income: number; expense: number }>
+        const rows = Object.keys(by)
+          .sort()
+          .map((d) => ({ date: d, income: by[d]?.income ?? 0, expense: by[d]?.expense ?? 0 }))
+        setCashFlowRows(rows)
+      })
+      .catch(() => setCashFlowRows([]))
+  }, [range.start, range.end, accountIds])
+
+  useEffect(() => {
+    const token = getTokenFromCookie()
+    const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+    const params = new URLSearchParams()
+    if (range.start) params.set('start_date', range.start)
+    if (range.end) params.set('end_date', range.end)
+    if (accountIds.length > 0) params.set('account_ids', accountIds.join(','))
+
+    fetch(`/api/networth/timeseries${params.toString() ? `?${params.toString()}` : ''}`, { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        setBaseCurrency(data?.base_currency || 'USD')
+        setNetWorthRows(Array.isArray(data?.series) ? data.series : [])
+      })
+      .catch(() => setNetWorthRows([]))
+  }, [range.start, range.end, accountIds])
+
+  const stats = useMemo(() => {
+    if (statsData) return statsData
+    const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+    const totalExpenses = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+    return { 
+      totalIncome, 
+      totalExpenses, 
+      balance: totalIncome - totalExpenses, 
+      transactionCount: transactions.length,
+    }
+  }, [transactions, statsData])
+
+  const buildBreakdown = useCallback((type: 'expense' | 'income') => {
+    let byCategory = categoryBreakdown[type]
+    // fallback: build from transactions prop if API data is empty
+    if (Object.keys(byCategory).length === 0) {
+      byCategory = {}
+      for (const t of transactions) {
+        if (t.type !== type) continue
+        const cat = (t as unknown as { category?: { name?: string } }).category?.name ?? 'Uncategorized'
+        byCategory[cat] = (byCategory[cat] ?? 0) + t.amount
+      }
+    }
+    return Object.entries(byCategory)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 7)
+      .map(([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }))
+  }, [categoryBreakdown, transactions])
+
+  const cashFlowChart = useMemo(() => {
+    const fmtDay = (d: string) => {
+      const dt = new Date(d)
+      return `${dt.getDate()}`
+    }
+    const fmtMonth = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short' })
+
+    if (range.granularity === 'day') {
+      return cashFlowRows.map((r) => ({
+        x: fmtDay(r.date),
+        income: r.income,
+        expenses: r.expense,
+      }))
+    }
+
+    // bucket into months
+    const buckets = new Map<string, { income: number; expenses: number; date: string }>()
+    for (const r of cashFlowRows) {
+      const dt = new Date(r.date)
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`
+      const baseDate = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-01`
+      const cur = buckets.get(key) || { income: 0, expenses: 0, date: baseDate }
+      cur.income += r.income
+      cur.expenses += r.expense
+      buckets.set(key, cur)
+    }
+    return Array.from(buckets.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((b) => ({ x: fmtMonth(b.date), income: b.income, expenses: b.expenses }))
+  }, [cashFlowRows, range.granularity])
+
+  const netWorthChart = useMemo(() => {
+    const fmtDay = (d: string) => {
+      const dt = new Date(d)
+      return `${dt.getDate()}`
+    }
+    const fmtMonth = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short' })
+
+    if (range.granularity === 'day') {
+      return netWorthRows.map((r) => ({ x: fmtDay(r.date), netWorth: r.net_worth }))
+    }
+
+    // bucket: take last value per month
+    const buckets = new Map<string, { date: string; netWorth: number }>()
+    for (const r of netWorthRows) {
+      const dt = new Date(r.date)
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`
+      const monthEndSortKey = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+      const cur = buckets.get(key)
+      if (!cur || monthEndSortKey.localeCompare(cur.date) > 0) {
+        buckets.set(key, { date: monthEndSortKey, netWorth: r.net_worth })
+      }
+    }
+    return Array.from(buckets.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((b) => ({ x: fmtMonth(b.date), netWorth: b.netWorth }))
+  }, [netWorthRows, range.granularity])
 
   const fmt = (n: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(n)
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: baseCurrency || 'USD', minimumFractionDigits: 0 }).format(n)
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Income</CardTitle>
-            <TrendingUp className="h-4 w-4 text-income" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-income">{fmt(stats.totalIncome)}</div>
-            <p className="text-xs text-muted-foreground">This month</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Expenses</CardTitle>
-            <TrendingDown className="h-4 w-4 text-expense" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-expense">{fmt(stats.totalExpenses)}</div>
-            <p className="text-xs text-muted-foreground">This month</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Balance</CardTitle>
-            <Wallet className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${stats.balance >= 0 ? 'text-income' : 'text-expense'}`}>
-              {fmt(stats.balance)}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">Balance</p>
+              <p className={`text-lg font-bold ${stats.balance >= 0 ? 'text-income' : 'text-expense'}`}>
+                {fmt(stats.balance)}
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">Net this month</p>
-          </CardContent>
+            <Badge variant="outline" className="text-xs">
+              0.0%
+            </Badge>
+          </div>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Transactions</CardTitle>
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">Income</p>
+              <p className="text-lg font-bold text-income">{fmt(stats.totalIncome)}</p>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              0.0%
+            </Badge>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">Expenses</p>
+              <p className="text-lg font-bold text-expense">{fmt(stats.totalExpenses)}</p>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              0.0%
+            </Badge>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">Transactions</p>
+              <p className="text-lg font-bold text-foreground">{stats.transactionCount}</p>
+            </div>
             <Receipt className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">{stats.transactionCount}</div>
-            <p className="text-xs text-muted-foreground">This month</p>
-          </CardContent>
+          </div>
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Income vs Expenses</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {monthlyData.some(d => d.Income > 0 || d.Expenses > 0) ? (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={monthlyData} barCategoryGap="30%" barGap={4}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={tickColor} strokeOpacity={0.3} />
-                  <XAxis
-                    dataKey="month"
-                    tick={{ fontSize: 11, fill: tickColor }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: tickColor }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v) => `$${v}`}
-                    width={48}
-                  />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: tickColor, opacity: 0.08 }} />
-                  <Bar dataKey="Income" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={32} />
-                  <Bar dataKey="Expenses" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={32} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground">
-                No transaction data yet
-              </div>
-            )}
-            <div className="mt-2 flex items-center justify-center gap-4 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#10b981]" />Income</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#ef4444]" />Expenses</span>
-            </div>
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="cashflow" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="cashflow">Cash Flow</TabsTrigger>
+          <TabsTrigger value="networth">Net Worth</TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Expense Breakdown</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {categoryBreakdown.length > 0 ? (
-              <div className="flex items-center gap-6">
-                <ResponsiveContainer width="45%" height={200}>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <TabsContent value="cashflow" className="mt-0">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Cash Flow</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {cashFlowChart.some(d => d.income !== 0 || d.expenses !== 0) ? (
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart data={cashFlowChart} barGap={6} barCategoryGap="15%">
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={tickColor} strokeOpacity={0.3} />
+                      <XAxis dataKey="x" tick={{ fontSize: 11, fill: tickColor }} axisLine={false} tickLine={false} />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: tickColor }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v) => `${v}`}
+                        width={48}
+                      />
+                      <Tooltip
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload?.length) return null
+                          const p = payload.reduce((acc, item) => {
+                            acc[item.dataKey as string] = item.value as number
+                            return acc
+                          }, {} as Record<string, number>)
+                          return (
+                            <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-lg text-xs">
+                              <p className="mb-1 font-medium text-foreground">{label}</p>
+                              <div className="space-y-1">
+                                <div className="flex justify-between gap-4">
+                                  <span className="text-muted-foreground">Income:</span>
+                                  <span className="font-medium text-income">{fmt(p.income || 0)}</span>
+                                </div>
+                                <div className="flex justify-between gap-4">
+                                  <span className="text-muted-foreground">Expenses:</span>
+                                  <span className="font-medium text-expense">{fmt(p.expenses || 0)}</span>
+                                </div>
+                                <div className="flex justify-between gap-4">
+                                  <span className="text-muted-foreground">Net:</span>
+                                  <span className="font-medium">{fmt((p.income || 0) - (p.expenses || 0))}</span>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        }}
+                        cursor={{ fill: 'transparent' }}
+                      />
+                      <Bar dataKey="income" fill="#10b981" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="expenses" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground">
+                    No transaction data yet
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="networth" className="mt-0">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={240}>
+                  <AreaChart data={netWorthChart}>
+                    <defs>
+                      <linearGradient id="assetsGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.05}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={tickColor} strokeOpacity={0.3} />
+                    <XAxis dataKey="x" tick={{ fontSize: 11, fill: tickColor }} axisLine={false} tickLine={false} />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: tickColor }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => `${v}`}
+                      width={48}
+                    />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null
+                        const v = (payload[0]?.value as number) ?? 0
+                        return (
+                          <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-lg text-xs">
+                            <p className="mb-1 font-medium text-foreground">{label}</p>
+                            <div className="flex justify-between gap-4">
+                              <span className="text-muted-foreground">Net Worth:</span>
+                              <span className="font-medium">{fmt(v)}</span>
+                            </div>
+                          </div>
+                        )
+                      }}
+                      cursor={{ stroke: tickColor, strokeWidth: 1, strokeDasharray: '3 3' }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="netWorth" 
+                      stroke="#10b981" 
+                      strokeWidth={2}
+                      fill="url(#assetsGradient)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <CategoryBreakdownCard transactions={transactions} buildBreakdown={buildBreakdown} fmt={fmt} />
+        </div>
+      </Tabs>
+    </div>
+  )
+}
+
+type BreakdownItem = { name: string; value: number; color: string }
+
+function renderActiveShape(props: Record<string, number> & { name: string; value: number; fill: string; isActive: boolean; opacity?: number }) {
+  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, isActive, opacity = 1 } = props
+  const r = isActive ? outerRadius + 6 : outerRadius
+  return (
+    <Sector cx={cx} cy={cy} innerRadius={innerRadius} outerRadius={r} startAngle={startAngle} endAngle={endAngle} fill={fill} opacity={opacity} />
+  )
+}
+
+function CategoryBreakdownCard({
+  transactions,
+  buildBreakdown,
+  fmt,
+}: {
+  transactions: Transaction[]
+  buildBreakdown: (type: 'expense' | 'income') => BreakdownItem[]
+  fmt: (n: number) => string
+}) {
+  const [type, setType] = useState<'expense' | 'income'>('expense')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  const data = useMemo(() => buildBreakdown(type), [buildBreakdown, type])
+
+  // Reset selection when type changes
+  useEffect(() => { setSelected(new Set()) }, [type])
+
+  const hasSelection = selected.size > 0
+
+  const displayedSum = useMemo(() => {
+    if (!hasSelection) return data.reduce((s, d) => s + d.value, 0)
+    return data.filter(d => selected.has(d.name)).reduce((s, d) => s + d.value, 0)
+  }, [data, selected, hasSelection])
+
+  const toggle = (name: string) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(name) ? next.delete(name) : next.add(name)
+      return next
+    })
+  }
+
+  const chartData = data.map(d => ({
+    ...d,
+    fill: hasSelection && !selected.has(d.name) ? '#3f3f46' : d.color,
+    isActive: hasSelection && selected.has(d.name),
+    opacity: hasSelection && !selected.has(d.name) ? 0.35 : 1,
+  }))
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium">Category Breakdown</CardTitle>
+          <ToggleGroup
+            type="single"
+            value={type}
+            onValueChange={(v) => v && setType(v as 'expense' | 'income')}
+            variant="outline"
+            size="sm"
+            className="h-7"
+          >
+            <ToggleGroupItem value="expense" className="text-xs px-3 h-7">Expenses</ToggleGroupItem>
+            <ToggleGroupItem value="income" className="text-xs px-3 h-7">Income</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {data.length > 0 ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-center">
+              <div className="relative">
+                <ResponsiveContainer width={200} height={200}>
                   <PieChart>
                     <Pie
-                      data={categoryBreakdown}
+                      data={chartData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={52}
-                      outerRadius={78}
+                      innerRadius={56}
+                      outerRadius={80}
                       dataKey="value"
                       stroke="none"
                       paddingAngle={2}
+                      isAnimationActive
+                      activeShape={(props: unknown) => {
+                        const p = props as Record<string, number> & { name: string; value: number; fill: string; isActive: boolean; opacity?: number }
+                        return renderActiveShape(p)
+                      }}
+                      activeIndex={chartData.map((_, i) => i)}
                     >
-                      {categoryBreakdown.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
+                      {chartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
                       ))}
                     </Pie>
-                    <Tooltip content={<PieTooltip />} />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null
+                        const item = payload[0]
+                        return (
+                          <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-lg text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.payload.color }} />
+                              <span className="text-muted-foreground">{item.payload.name}:</span>
+                              <span className="font-medium text-foreground">{fmt(item.value as number)}</span>
+                            </div>
+                          </div>
+                        )
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="flex-1 space-y-2">
-                  {categoryBreakdown.map((item) => (
-                    <div key={item.name} className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
-                        <span className="truncate text-muted-foreground">{item.name}</span>
-                      </div>
-                      <span className="ml-2 shrink-0 font-medium text-foreground">{fmt(item.value)}</span>
-                    </div>
-                  ))}
+                {/* Center label */}
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-[10px] text-muted-foreground">
+                    {hasSelection ? `${selected.size} selected` : 'Total'}
+                  </span>
+                  <span className="text-base font-bold text-foreground leading-tight">{fmt(displayedSum)}</span>
                 </div>
               </div>
-            ) : (
-              <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
-                No expense data yet
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+            </div>
+
+            {/* Category badges */}
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              {data.map((item) => {
+                const isOn = !hasSelection || selected.has(item.name)
+                return (
+                  <button
+                    key={item.name}
+                    onClick={() => toggle(item.name)}
+                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-all ${
+                      selected.has(item.name)
+                        ? 'border-transparent text-foreground'
+                        : hasSelection
+                        ? 'border-border text-muted-foreground opacity-50'
+                        : 'border-border text-muted-foreground hover:border-foreground/30'
+                    }`}
+                    style={selected.has(item.name) ? { backgroundColor: item.color + '33', borderColor: item.color } : {}}
+                  >
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full transition-colors"
+                      style={{ backgroundColor: isOn ? item.color : '#52525b' }}
+                    />
+                    <span>{item.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
+            No data for this period
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

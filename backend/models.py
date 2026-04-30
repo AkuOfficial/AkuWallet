@@ -1,4 +1,5 @@
 from typing import Optional
+from decimal import Decimal
 from pydantic import BaseModel
 
 
@@ -15,6 +16,8 @@ class ChangePasswordRequest(BaseModel):
 class TransactionCreate(BaseModel):
     type: str
     amount: float
+    currency: str = "PLN"
+    account_id: Optional[str] = None
     description: Optional[str] = None
     category_id: Optional[str] = None
     date: str
@@ -26,6 +29,8 @@ class TransactionCreate(BaseModel):
 class TransactionUpdate(BaseModel):
     type: str
     amount: float
+    currency: str = "PLN"
+    account_id: Optional[str] = None
     description: Optional[str] = None
     category_id: Optional[str] = None
     date: str
@@ -63,9 +68,11 @@ class GoalUpdate(BaseModel):
 class ImportedTransaction(BaseModel):
     type: str
     amount: float
+    currency: str = "PLN"
     description: Optional[str] = None
     category: Optional[str] = None
     date: str
+    account_id: Optional[str] = None
 
 
 class SuggestCategoryItem(BaseModel):

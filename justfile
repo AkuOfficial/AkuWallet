@@ -8,7 +8,8 @@ default:
     just --list
 
 install:
-    uv sync
+    pnpm install
+    cd backend ; uv sync
 
 backend:
     cd backend ; uv run fastapi dev main.py

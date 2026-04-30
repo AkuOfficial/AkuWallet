@@ -19,6 +19,8 @@ async def list_transactions(
     type: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    account_ids: Optional[str] = None,
+    category_ids: Optional[str] = None,
 ):
     where = ["t.user_id = ?"]
     args: list[Any] = [user["id"]]
@@ -31,6 +33,16 @@ async def list_transactions(
     if end_date:
         where.append("t.date <= ?")
         args.append(end_date)
+    if account_ids:
+        ids = [s.strip() for s in account_ids.split(",") if s.strip()]
+        if ids:
+            where.append(f"t.account_id IN ({','.join(['?'] * len(ids))})")
+            args.extend(ids)
+    if category_ids:
+        ids = [s.strip() for s in category_ids.split(",") if s.strip()]
+        if ids:
+            where.append(f"t.category_id IN ({','.join(['?'] * len(ids))})")
+            args.extend(ids)
 
     sql = f"""
       SELECT
@@ -79,7 +91,8 @@ async def list_transactions(
                 }
             out.append({
                 "id": r["id"], "user_id": r["user_id"], "type": r["type"],
-                "amount": r["amount"], "description": r["description"],
+                "account_id": r["account_id"], "amount": r["amount"], "currency": r["currency"],
+                "description": r["description"],
                 "category_id": r["category_id"], "date": r["date"],
                 "recurrence": r["recurrence"], "recurrence_end_date": r["recurrence_end_date"],
                 "created_at": r["created_at"], "updated_at": r["updated_at"],
@@ -99,12 +112,12 @@ async def create_transaction(
         await conn.execute(
             """
             INSERT INTO transactions (
-              id, user_id, type, amount, description, category_id, date,
+              id, user_id, account_id, type, amount, currency, description, category_id, date,
               recurrence, recurrence_end_date, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (tx_id, user["id"], data.type, float(data.amount), data.description,
-             data.category_id, data.date, data.recurrence, data.recurrence_end_date, created_at),
+            (tx_id, user["id"], data.account_id, data.type, float(data.amount), data.currency,
+             data.description, data.category_id, data.date, data.recurrence, data.recurrence_end_date, created_at),
         )
         for tag_id in data.tag_ids:
             await conn.execute(
@@ -114,7 +127,8 @@ async def create_transaction(
         await conn.commit()
 
     return {
-        "id": tx_id, "user_id": user["id"], "type": data.type, "amount": float(data.amount),
+        "id": tx_id, "user_id": user["id"], "account_id": data.account_id, "type": data.type,
+        "amount": float(data.amount), "currency": data.currency,
         "description": data.description, "category_id": data.category_id, "date": data.date,
         "recurrence": data.recurrence, "recurrence_end_date": data.recurrence_end_date,
         "created_at": created_at, "updated_at": None,
@@ -139,12 +153,13 @@ async def update_transaction(
         await conn.execute(
             """
             UPDATE transactions
-            SET type = ?, amount = ?, description = ?, category_id = ?, date = ?,
+            SET account_id = ?, type = ?, amount = ?, currency = ?, description = ?, category_id = ?, date = ?,
                 recurrence = ?, recurrence_end_date = ?, updated_at = ?
             WHERE id = ? AND user_id = ?
             """,
-            (data.type, float(data.amount), data.description, data.category_id, data.date,
-             data.recurrence, data.recurrence_end_date, updated_at, transaction_id, user["id"]),
+            (data.account_id, data.type, float(data.amount), data.currency, data.description,
+             data.category_id, data.date, data.recurrence, data.recurrence_end_date, updated_at,
+             transaction_id, user["id"]),
         )
         await conn.execute(
             "DELETE FROM transaction_tags WHERE transaction_id = ?", (transaction_id,)

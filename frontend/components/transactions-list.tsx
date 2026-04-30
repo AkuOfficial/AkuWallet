@@ -72,10 +72,10 @@ export function TransactionsList({
     })
   }, [transactions, search, typeFilter, categoryFilter])
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, currency?: string) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: currency || 'USD',
     }).format(amount)
   }
 
@@ -225,7 +225,7 @@ export function TransactionsList({
                         )}
                       >
                         {transaction.type === 'income' ? '+' : '-'}
-                        {formatCurrency(transaction.amount)}
+                        {formatCurrency(transaction.amount, transaction.currency)}
                       </div>
                       <div className="flex items-center gap-1">
                         <Button

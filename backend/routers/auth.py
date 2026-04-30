@@ -63,6 +63,28 @@ async def change_password(
     return {"success": True}
 
 
+@router.post("/logout")
+async def logout(
+    user=fastapi.Depends(get_current_user),
+    authorization: str = fastapi.Header(None),
+):
+    token = authorization.split(" ", 1)[1].strip() if authorization else None
+    if not token:
+        raise fastapi.HTTPException(status_code=401, detail="Not authenticated")
+    async with db() as conn:
+        await conn.execute("DELETE FROM sessions WHERE token = ? AND user_id = ?", (token, user["id"]))
+        await conn.commit()
+    return {"success": True}
+
+
+@router.post("/logout-all")
+async def logout_all_devices(user=fastapi.Depends(get_current_user)):
+    async with db() as conn:
+        await conn.execute("DELETE FROM sessions WHERE user_id = ?", (user["id"],))
+        await conn.commit()
+    return {"success": True}
+
+
 @router.get("/me")
 async def me(user=fastapi.Depends(get_current_user)):
     return {"user": user}

@@ -7,7 +7,7 @@ dotenv.load_dotenv()
 import fastapi.middleware.cors
 
 from database import db, migrate
-from routers import auth, transactions, categories, tags, goals, imports, stats, ai
+from routers import auth, transactions, categories, tags, goals, imports, stats, ai, accounts, investments, settings, networth, smart_import, automation_rules
 
 
 @asynccontextmanager
@@ -35,6 +35,12 @@ app.include_router(goals.router)
 app.include_router(imports.router)
 app.include_router(stats.router)
 app.include_router(ai.router)
+app.include_router(accounts.router)
+app.include_router(investments.router)
+app.include_router(settings.router)
+app.include_router(networth.router)
+app.include_router(smart_import.router)
+app.include_router(automation_rules.router)
 
 
 @app.get("/health")

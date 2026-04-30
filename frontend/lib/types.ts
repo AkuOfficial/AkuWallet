@@ -26,6 +26,8 @@ export interface Transaction {
   user_id: string
   type: TransactionType
   amount: number
+  currency?: string
+  account_id?: string | null
   description: string | null
   category_id: string | null
   date: string
@@ -80,4 +82,38 @@ export interface ImportedTransaction {
   category?: string
   date: string
   tags?: string[]
+}
+
+export interface UserSettings {
+  user_id: string
+  base_currency: string
+  created_at?: string
+  updated_at?: string | null
+}
+
+export interface AutomationRule {
+  id: string
+  user_id: string
+  name: string | null
+  match_contains: string
+  category_id: string
+  enabled: boolean | number
+  created_at: string
+  updated_at: string | null
+  category_name?: string
+  category_type?: TransactionType
+}
+
+export interface ExportPayload {
+  user: { id: string; email: string; created_at: string }
+  settings: UserSettings | null
+  categories: Category[]
+  tags: Tag[]
+  goals: Goal[]
+  accounts: any[]
+  investments: any[]
+  transactions: Transaction[]
+  transaction_tags: any[]
+  automation_rules: any[]
+  exported_at: string
 }

@@ -2,7 +2,7 @@ import secrets
 
 import fastapi
 
-from database import db
+from database import db, fetchone
 from dependencies import get_current_user
 from models import CategoryCreate
 from security import _now_iso
@@ -39,6 +39,39 @@ async def create_category(
     return {
         "id": cat_id, "user_id": user["id"], "name": data.name, "type": data.type,
         "icon": data.icon, "color": data.color, "is_default": False, "created_at": created_at,
+    }
+
+
+@router.put("/{category_id}")
+async def update_category(
+    category_id: str,
+    data: CategoryCreate,
+    user=fastapi.Depends(get_current_user),
+):
+    updated_at = _now_iso()
+    async with db() as conn:
+        existing = await fetchone(
+            conn,
+            "SELECT * FROM categories WHERE id = ? AND user_id = ? AND is_default = 0",
+            (category_id, user["id"]),
+        )
+        if not existing:
+            raise fastapi.HTTPException(status_code=404, detail="Category not found")
+        await conn.execute(
+            "UPDATE categories SET name = ?, type = ?, icon = ?, color = ? WHERE id = ? AND user_id = ?",
+            (data.name, data.type, data.icon, data.color, category_id, user["id"]),
+        )
+        await conn.commit()
+    return {
+        "id": category_id,
+        "user_id": user["id"],
+        "name": data.name,
+        "type": data.type,
+        "icon": data.icon,
+        "color": data.color,
+        "is_default": False,
+        "created_at": existing["created_at"],
+        "updated_at": updated_at,
     }
 
 

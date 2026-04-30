@@ -24,7 +24,7 @@ import { Plus, Sparkles, X, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createTransaction, suggestCategory } from '@/lib/api'
 import type { Category, Tag, TransactionType, RecurrenceType } from '@/lib/types'
-import { cn } from '@/lib/utils'
+import { CURRENCY_CODES } from '@/lib/currencies'
 
 interface AddTransactionDialogProps {
   categories: Category[]
@@ -43,6 +43,7 @@ export function AddTransactionDialog({ categories, tags, onSuccess }: AddTransac
   const [recurrence, setRecurrence] = useState<RecurrenceType>('none')
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [currency, setCurrency] = useState('PLN')
   const [isSuggesting, setIsSuggesting] = useState(false)
   const [suggestedCategory, setSuggestedCategory] = useState<string | null>(null)
 
@@ -57,6 +58,7 @@ export function AddTransactionDialog({ categories, tags, onSuccess }: AddTransac
     setRecurrence('none')
     setRecurrenceEndDate('')
     setSelectedTags([])
+    setCurrency('PLN')
     setSuggestedCategory(null)
   }
 
@@ -68,6 +70,7 @@ export function AddTransactionDialog({ categories, tags, onSuccess }: AddTransac
       await createTransaction({
         type,
         amount: parseFloat(amount),
+        currency,
         description: description || undefined,
         category_id: categoryId || undefined,
         date,
@@ -149,16 +152,29 @@ export function AddTransactionDialog({ categories, tags, onSuccess }: AddTransac
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="dialog-amount">Amount</Label>
-              <Input
-                id="dialog-amount"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                required
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="dialog-amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  required
+                  className="flex-1"
+                />
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCY_CODES.map(c => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-2">

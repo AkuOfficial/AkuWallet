@@ -16,10 +16,10 @@ interface RecentTransactionsProps {
 export function RecentTransactions({ transactions }: RecentTransactionsProps) {
   const recentTransactions = transactions.slice(0, 5)
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, currency?: string) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: currency || 'USD',
     }).format(amount)
   }
 
@@ -89,7 +89,7 @@ export function RecentTransactions({ transactions }: RecentTransactionsProps) {
                   )}
                 >
                   {transaction.type === 'income' ? '+' : '-'}
-                  {formatCurrency(transaction.amount)}
+                  {formatCurrency(transaction.amount, transaction.currency)}
                 </div>
               </div>
             ))}

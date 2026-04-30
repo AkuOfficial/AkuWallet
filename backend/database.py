@@ -98,8 +98,10 @@ async def migrate(conn: aiosqlite.Connection) -> None:
         CREATE TABLE IF NOT EXISTS transactions (
           id TEXT PRIMARY KEY,
           user_id TEXT NOT NULL,
+          account_id TEXT,
           type TEXT NOT NULL,
           amount REAL NOT NULL,
+          currency TEXT NOT NULL DEFAULT 'PLN',
           description TEXT,
           category_id TEXT,
           date TEXT NOT NULL,
@@ -108,6 +110,7 @@ async def migrate(conn: aiosqlite.Connection) -> None:
           created_at TEXT NOT NULL,
           updated_at TEXT,
           FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE SET NULL,
           FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE SET NULL
         );
 
@@ -130,6 +133,68 @@ async def migrate(conn: aiosqlite.Connection) -> None:
           updated_at TEXT,
           FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS user_settings (
+          user_id TEXT PRIMARY KEY,
+          base_currency TEXT NOT NULL DEFAULT 'PLN',
+          display_currency TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT,
+          FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS accounts (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          currency TEXT NOT NULL DEFAULT 'PLN',
+          balance REAL NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT,
+          FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS investments (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          ticker TEXT,
+          currency TEXT NOT NULL DEFAULT 'USD',
+          invested_amount REAL NOT NULL,
+          current_value REAL NOT NULL,
+          quantity REAL,
+          is_automated INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT,
+          FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS exchange_rates (
+          id TEXT PRIMARY KEY,
+          from_currency TEXT NOT NULL,
+          to_currency TEXT NOT NULL,
+          rate REAL NOT NULL,
+          date TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          UNIQUE(from_currency, to_currency, date)
+        );
+
+        CREATE TABLE IF NOT EXISTS automation_rules (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          name TEXT,
+          match_contains TEXT NOT NULL,
+          category_id TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          updated_at TEXT,
+          FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY(category_id) REFERENCES categories(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_automation_rules_user ON automation_rules(user_id);
         """
     )
 

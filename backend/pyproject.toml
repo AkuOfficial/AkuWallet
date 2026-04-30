@@ -1,5 +1,5 @@
 [project]
-name = "wallet-backend"
+name = "akuwallet-backend"
 version = "0.1.0"
 description = "Python FastAPI backend for Wallet personal finance app"
 requires-python = ">=3.12"

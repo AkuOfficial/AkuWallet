@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
 import { DashboardNav } from '@/components/dashboard-nav'
+import { TopNavigation } from '@/components/top-navigation'
+import { FilterProvider } from '@/lib/contexts/filter-context'
 import { cookies } from 'next/headers'
 
 export default async function DashboardLayout({
@@ -23,11 +25,13 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <DashboardNav userEmail={user.email || ''} />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {children}
-      </main>
-    </div>
+    <FilterProvider>
+      <div className="min-h-screen bg-background">
+        <TopNavigation />
+        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          {children}
+        </main>
+      </div>
+    </FilterProvider>
   )
 }

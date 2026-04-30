@@ -5,7 +5,10 @@ import type {
   Goal, 
   TransactionType, 
   RecurrenceType,
-  ImportedTransaction 
+  ImportedTransaction,
+  UserSettings,
+  AutomationRule,
+  ExportPayload
 } from '@/lib/types'
 
 async function getAuthHeader(): Promise<Record<string, string>> {
@@ -60,6 +63,8 @@ export async function getTransactions(params?: {
   type?: TransactionType
   start_date?: string
   end_date?: string
+  account_ids?: string
+  category_ids?: string
 }): Promise<Transaction[]> {
   const searchParams = new URLSearchParams()
   if (params?.limit) searchParams.set('limit', params.limit.toString())
@@ -67,6 +72,8 @@ export async function getTransactions(params?: {
   if (params?.type) searchParams.set('type', params.type)
   if (params?.start_date) searchParams.set('start_date', params.start_date)
   if (params?.end_date) searchParams.set('end_date', params.end_date)
+  if (params?.account_ids) searchParams.set('account_ids', params.account_ids)
+  if (params?.category_ids) searchParams.set('category_ids', params.category_ids)
   
   const query = searchParams.toString()
   return apiRequest<Transaction[]>(`/transactions${query ? `?${query}` : ''}`)
@@ -75,6 +82,7 @@ export async function getTransactions(params?: {
 export async function createTransaction(data: {
   type: TransactionType
   amount: number
+  currency?: string
   description?: string
   category_id?: string
   date: string
@@ -231,6 +239,90 @@ export async function changePassword(data: {
   new_password: string
 }): Promise<{ success: boolean }> {
   return apiRequest('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function logout(): Promise<{ success: boolean }> {
+  return apiRequest('/auth/logout', { method: 'POST' })
+}
+
+export async function logoutAllDevices(): Promise<{ success: boolean }> {
+  return apiRequest('/auth/logout-all', { method: 'POST' })
+}
+
+export async function getMe(): Promise<{ user: { id: string; email: string; created_at: string } }> {
+  return apiRequest('/auth/me', { method: 'GET' })
+}
+
+// Settings
+export async function getUserSettings(): Promise<UserSettings> {
+  return apiRequest<UserSettings>('/settings')
+}
+
+export async function updateUserSettings(data: {
+  base_currency: string
+}): Promise<UserSettings> {
+  return apiRequest<UserSettings>('/settings', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+// Categories (update missing in original)
+export async function updateCategory(
+  id: string,
+  data: { name: string; type: TransactionType; icon?: string | null; color?: string | null }
+): Promise<Category> {
+  return apiRequest<Category>(`/categories/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+// Automation rules
+export async function listAutomationRules(): Promise<AutomationRule[]> {
+  return apiRequest<AutomationRule[]>('/automation-rules')
+}
+
+export async function createAutomationRule(data: {
+  name?: string | null
+  match_contains: string
+  category_id: string
+  enabled?: boolean
+}): Promise<AutomationRule> {
+  return apiRequest<AutomationRule>('/automation-rules', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateAutomationRule(
+  id: string,
+  data: { name?: string | null; match_contains: string; category_id: string; enabled?: boolean }
+): Promise<AutomationRule> {
+  return apiRequest<AutomationRule>(`/automation-rules/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteAutomationRule(id: string): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>(`/automation-rules/${id}`, { method: 'DELETE' })
+}
+
+// Data management
+export async function exportAllData(): Promise<ExportPayload> {
+  return apiRequest<ExportPayload>('/settings/export?format=json')
+}
+
+export async function clearAllTransactions(): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>('/settings/clear-transactions', { method: 'POST' })
+}
+
+export async function deleteAccount(data: { password?: string; confirm?: string }): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>('/settings/delete-account', {
     method: 'POST',
     body: JSON.stringify(data),
   })
