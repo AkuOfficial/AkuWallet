@@ -30,17 +30,17 @@ async def create_goal(
     async with db() as conn:
         await conn.execute(
             """
-            INSERT INTO goals (id, user_id, name, target_amount, current_amount, deadline, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO goals (id, user_id, name, target_amount, current_amount, currency, deadline, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (goal_id, user["id"], data.name, float(data.target_amount),
-             float(data.current_amount), data.deadline, created_at),
+             float(data.current_amount), data.currency, data.deadline, created_at),
         )
         await conn.commit()
     return {
         "id": goal_id, "user_id": user["id"], "name": data.name,
         "target_amount": float(data.target_amount), "current_amount": float(data.current_amount),
-        "deadline": data.deadline, "created_at": created_at, "updated_at": None,
+        "currency": data.currency, "deadline": data.deadline, "created_at": created_at, "updated_at": None,
     }
 
 
@@ -60,11 +60,11 @@ async def update_goal(
         await conn.execute(
             """
             UPDATE goals
-            SET name = ?, target_amount = ?, current_amount = ?, deadline = ?, updated_at = ?
+            SET name = ?, target_amount = ?, current_amount = ?, currency = ?, deadline = ?, updated_at = ?
             WHERE id = ? AND user_id = ?
             """,
             (data.name, float(data.target_amount), float(data.current_amount),
-             data.deadline, updated_at, goal_id, user["id"]),
+             data.currency, data.deadline, updated_at, goal_id, user["id"]),
         )
         await conn.commit()
         row = await fetchone(conn, "SELECT * FROM goals WHERE id = ?", (goal_id,))

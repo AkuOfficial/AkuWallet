@@ -5,26 +5,29 @@ import { TransactionsList } from '@/components/transactions-list'
 import { AddTransactionDialog } from '@/components/add-transaction-dialog'
 import { ManageCategoriesDialog } from '@/components/manage-categories-dialog'
 import { ManageTagsDialog } from '@/components/manage-tags-dialog'
-import { getTransactions, getCategories, getTags } from '@/lib/api'
-import type { Category, Tag, Transaction } from '@/lib/types'
+import { getTransactions, getCategories, getTags, getUserSettings } from '@/lib/api'
+import type { Category, Tag, Transaction, UserSettings } from '@/lib/types'
 import { Loader2 } from 'lucide-react'
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [tags, setTags] = useState<Tag[]>([])
+  const [settings, setSettings] = useState<UserSettings | null>(null)
   const [loading, setLoading] = useState(true)
 
   const loadData = async () => {
     try {
-      const [txData, catData, tagData] = await Promise.all([
+      const [txData, catData, tagData, settingsData] = await Promise.all([
         getTransactions({ limit: 100 }),
         getCategories(),
         getTags(),
+        getUserSettings().catch(() => null),
       ])
       setTransactions(txData)
       setCategories(catData)
       setTags(tagData)
+      setSettings(settingsData)
     } catch (error) {
       console.error('Failed to load data:', error)
     } finally {
@@ -59,6 +62,7 @@ export default function TransactionsPage() {
           <AddTransactionDialog
             categories={categories}
             tags={tags}
+            baseCurrency={settings?.base_currency}
             onSuccess={loadData}
           />
         </div>
@@ -69,6 +73,7 @@ export default function TransactionsPage() {
         categories={categories}
         tags={tags}
         onSuccess={loadData}
+        baseCurrency={settings?.base_currency}
       />
     </div>
   )

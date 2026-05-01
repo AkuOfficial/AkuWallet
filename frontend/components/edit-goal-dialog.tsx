@@ -10,10 +10,12 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Save, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { updateGoal } from '@/lib/api'
 import type { Goal } from '@/lib/types'
+import { CURRENCIES } from '@/lib/currencies'
 
 interface EditGoalDialogProps {
   goal: Goal
@@ -27,12 +29,14 @@ export function EditGoalDialog({ goal, open, onOpenChange, onSuccess }: EditGoal
   const [name, setName] = useState(goal.name)
   const [targetAmount, setTargetAmount] = useState(goal.target_amount.toString())
   const [currentAmount, setCurrentAmount] = useState(goal.current_amount.toString())
+  const [currency, setCurrency] = useState(goal.currency || 'PLN')
   const [deadline, setDeadline] = useState(goal.deadline?.split('T')[0] || '')
 
   useEffect(() => {
     setName(goal.name)
     setTargetAmount(goal.target_amount.toString())
     setCurrentAmount(goal.current_amount.toString())
+    setCurrency(goal.currency || 'PLN')
     setDeadline(goal.deadline?.split('T')[0] || '')
   }, [goal])
 
@@ -45,6 +49,7 @@ export function EditGoalDialog({ goal, open, onOpenChange, onSuccess }: EditGoal
         name,
         target_amount: parseFloat(targetAmount),
         current_amount: parseFloat(currentAmount),
+        currency,
         deadline: deadline || undefined,
       })
       
@@ -104,6 +109,20 @@ export function EditGoalDialog({ goal, open, onOpenChange, onSuccess }: EditGoal
                 required
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Currency</Label>
+            <Select value={currency} onValueChange={setCurrency}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCIES.map((c) => (
+                  <SelectItem key={c.code} value={c.code}>{c.code} — {c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">

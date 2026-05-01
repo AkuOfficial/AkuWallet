@@ -23,6 +23,7 @@ import { Save, X, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { updateTransaction } from '@/lib/api'
 import type { Category, Tag, Transaction, TransactionType, RecurrenceType } from '@/lib/types'
+import { CURRENCY_CODES } from '@/lib/currencies'
 import { cn } from '@/lib/utils'
 
 interface EditTransactionDialogProps {
@@ -32,6 +33,7 @@ interface EditTransactionDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
+  baseCurrency?: string
 }
 
 export function EditTransactionDialog({
@@ -41,6 +43,7 @@ export function EditTransactionDialog({
   open,
   onOpenChange,
   onSuccess,
+  baseCurrency = 'USD',
 }: EditTransactionDialogProps) {
   const [isPending, setIsPending] = useState(false)
   const [type, setType] = useState<TransactionType>(transaction.type)
@@ -55,6 +58,7 @@ export function EditTransactionDialog({
   const [selectedTags, setSelectedTags] = useState<string[]>(
     transaction.tags?.map(t => t.id) || []
   )
+  const [currency, setCurrency] = useState(transaction.currency || baseCurrency)
 
   const filteredCategories = categories.filter(c => c.type === type)
 
@@ -67,7 +71,8 @@ export function EditTransactionDialog({
     setRecurrence(transaction.recurrence)
     setRecurrenceEndDate(transaction.recurrence_end_date?.split('T')[0] || '')
     setSelectedTags(transaction.tags?.map(t => t.id) || [])
-  }, [transaction])
+    setCurrency(transaction.currency || baseCurrency)
+  }, [transaction, baseCurrency])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -77,6 +82,7 @@ export function EditTransactionDialog({
       await updateTransaction(transaction.id, {
         type,
         amount: parseFloat(amount),
+        currency,
         description: description || undefined,
         category_id: categoryId || undefined,
         date,
@@ -127,16 +133,29 @@ export function EditTransactionDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="edit-amount">Amount</Label>
-              <Input
-                id="edit-amount"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                required
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="edit-amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  required
+                  className="flex-1"
+                />
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCY_CODES.map(c => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-2">

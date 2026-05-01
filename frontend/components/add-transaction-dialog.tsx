@@ -29,10 +29,11 @@ import { CURRENCY_CODES } from '@/lib/currencies'
 interface AddTransactionDialogProps {
   categories: Category[]
   tags: Tag[]
+  baseCurrency?: string
   onSuccess?: () => void
 }
 
-export function AddTransactionDialog({ categories, tags, onSuccess }: AddTransactionDialogProps) {
+export function AddTransactionDialog({ categories, tags, baseCurrency = 'USD', onSuccess }: AddTransactionDialogProps) {
   const [open, setOpen] = useState(false)
   const [isPending, setIsPending] = useState(false)
   const [type, setType] = useState<TransactionType>('expense')
@@ -43,7 +44,7 @@ export function AddTransactionDialog({ categories, tags, onSuccess }: AddTransac
   const [recurrence, setRecurrence] = useState<RecurrenceType>('none')
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [currency, setCurrency] = useState('PLN')
+  const [currency, setCurrency] = useState(baseCurrency)
   const [isSuggesting, setIsSuggesting] = useState(false)
   const [suggestedCategory, setSuggestedCategory] = useState<string | null>(null)
 
@@ -58,7 +59,7 @@ export function AddTransactionDialog({ categories, tags, onSuccess }: AddTransac
     setRecurrence('none')
     setRecurrenceEndDate('')
     setSelectedTags([])
-    setCurrency('PLN')
+    setCurrency(baseCurrency)
     setSuggestedCategory(null)
   }
 

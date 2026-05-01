@@ -55,6 +55,7 @@ class GoalCreate(BaseModel):
     name: str
     target_amount: float
     current_amount: float = 0
+    currency: str = "PLN"
     deadline: Optional[str] = None
 
 
@@ -62,6 +63,7 @@ class GoalUpdate(BaseModel):
     name: str
     target_amount: float
     current_amount: float
+    currency: str = "PLN"
     deadline: Optional[str] = None
 
 

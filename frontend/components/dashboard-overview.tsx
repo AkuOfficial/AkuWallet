@@ -187,21 +187,12 @@ export function DashboardOverview({ transactions }: DashboardOverviewProps) {
   }, [transactions, statsData])
 
   const buildBreakdown = useCallback((type: 'expense' | 'income') => {
-    let byCategory = categoryBreakdown[type]
-    // fallback: build from transactions prop if API data is empty
-    if (Object.keys(byCategory).length === 0) {
-      byCategory = {}
-      for (const t of transactions) {
-        if (t.type !== type) continue
-        const cat = (t as unknown as { category?: { name?: string } }).category?.name ?? 'Uncategorized'
-        byCategory[cat] = (byCategory[cat] ?? 0) + t.amount
-      }
-    }
+    const byCategory = categoryBreakdown[type]
     return Object.entries(byCategory)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 7)
       .map(([name, value], i) => ({ name, value, color: COLORS[i % COLORS.length] }))
-  }, [categoryBreakdown, transactions])
+  }, [categoryBreakdown])
 
   const cashFlowChart = useMemo(() => {
     const fmtDay = (d: string) => {
@@ -453,7 +444,7 @@ function renderActiveShape(props: Record<string, number> & { name: string; value
 }
 
 function CategoryBreakdownCard({
-  transactions,
+  transactions: _transactions,
   buildBreakdown,
   fmt,
 }: {

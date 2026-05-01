@@ -43,6 +43,7 @@ interface TransactionsListProps {
   categories: Category[]
   tags: Tag[]
   onSuccess?: () => void
+  baseCurrency?: string
 }
 
 export function TransactionsList({
@@ -50,6 +51,7 @@ export function TransactionsList({
   categories,
   tags,
   onSuccess,
+  baseCurrency,
 }: TransactionsListProps) {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<TransactionType | 'all'>('all')
@@ -285,6 +287,7 @@ export function TransactionsList({
           open={!!editingTransaction}
           onOpenChange={(open) => !open && setEditingTransaction(null)}
           onSuccess={onSuccess}
+          baseCurrency={baseCurrency}
         />
       )}
     </>

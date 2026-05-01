@@ -101,6 +101,7 @@ export async function updateTransaction(
   data: {
     type: TransactionType
     amount: number
+    currency?: string
     description?: string
     category_id?: string
     date: string
@@ -174,6 +175,7 @@ export async function createGoal(data: {
   name: string
   target_amount: number
   current_amount?: number
+  currency?: string
   deadline?: string
 }): Promise<Goal> {
   return apiRequest<Goal>('/goals', {
@@ -188,6 +190,7 @@ export async function updateGoal(
     name: string
     target_amount: number
     current_amount: number
+    currency?: string
     deadline?: string
   }
 ): Promise<Goal> {

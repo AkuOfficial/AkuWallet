@@ -51,6 +51,7 @@ export interface Goal {
   name: string
   target_amount: number
   current_amount: number
+  currency: string
   deadline: string | null
   created_at: string
   updated_at: string

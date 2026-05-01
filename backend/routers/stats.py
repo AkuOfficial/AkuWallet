@@ -60,16 +60,13 @@ async def get_stats(
         amt_base = await convert_amount(Decimal(str(t["amount"])), cur, base_currency)
         amt_f = float(amt_base)
 
+        cat = t.get("category_name") or "Uncategorized"
         if t["type"] == "income":
             total_income += amt_base
-            if t.get("category_name"):
-                cat = t["category_name"]
-                income_by_category[cat] = income_by_category.get(cat, 0) + amt_f
+            income_by_category[cat] = income_by_category.get(cat, 0) + amt_f
         else:
             total_expense += amt_base
-            if t.get("category_name"):
-                cat = t["category_name"]
-                expense_by_category[cat] = expense_by_category.get(cat, 0) + amt_f
+            expense_by_category[cat] = expense_by_category.get(cat, 0) + amt_f
 
         date = t["date"]
         if date not in by_date:

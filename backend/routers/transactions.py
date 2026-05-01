@@ -114,7 +114,7 @@ async def create_transaction(
             INSERT INTO transactions (
               id, user_id, account_id, type, amount, currency, description, category_id, date,
               recurrence, recurrence_end_date, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (tx_id, user["id"], data.account_id, data.type, float(data.amount), data.currency,
              data.description, data.category_id, data.date, data.recurrence, data.recurrence_end_date, created_at),

@@ -11,9 +11,11 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createGoal } from '@/lib/api'
+import { CURRENCIES } from '@/lib/currencies'
 
 interface AddGoalDialogProps {
   onSuccess?: () => void
@@ -25,12 +27,14 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
   const [name, setName] = useState('')
   const [targetAmount, setTargetAmount] = useState('')
   const [currentAmount, setCurrentAmount] = useState('')
+  const [currency, setCurrency] = useState('PLN')
   const [deadline, setDeadline] = useState('')
 
   const resetForm = () => {
     setName('')
     setTargetAmount('')
     setCurrentAmount('')
+    setCurrency('PLN')
     setDeadline('')
   }
 
@@ -43,6 +47,7 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
         name,
         target_amount: parseFloat(targetAmount),
         current_amount: parseFloat(currentAmount) || 0,
+        currency,
         deadline: deadline || undefined,
       })
       
@@ -108,6 +113,20 @@ export function AddGoalDialog({ onSuccess }: AddGoalDialogProps) {
                 onChange={(e) => setCurrentAmount(e.target.value)}
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Currency</Label>
+            <Select value={currency} onValueChange={setCurrency}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCIES.map((c) => (
+                  <SelectItem key={c.code} value={c.code}>{c.code} — {c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
