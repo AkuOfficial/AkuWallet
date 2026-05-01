@@ -31,10 +31,10 @@ export function GoalsList({ goals, onSuccess }: GoalsListProps) {
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount)
@@ -171,13 +171,13 @@ export function GoalsList({ goals, onSuccess }: GoalsListProps) {
                   <div>
                     <p className="text-muted-foreground">Current</p>
                     <p className="font-semibold text-income">
-                      {formatCurrency(goal.current_amount)}
+                      {formatCurrency(goal.current_amount, goal.currency)}
                     </p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Target</p>
                     <p className="font-semibold text-foreground">
-                      {formatCurrency(goal.target_amount)}
+                      {formatCurrency(goal.target_amount, goal.currency)}
                     </p>
                   </div>
                 </div>
@@ -186,7 +186,7 @@ export function GoalsList({ goals, onSuccess }: GoalsListProps) {
                   {remaining > 0 ? (
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <TrendingUp className="h-4 w-4" />
-                      <span>{formatCurrency(remaining)} to go</span>
+                      <span>{formatCurrency(remaining, goal.currency)} to go</span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-1 text-income">

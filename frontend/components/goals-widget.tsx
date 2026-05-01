@@ -18,10 +18,10 @@ export function GoalsWidget({ goals }: GoalsWidgetProps) {
 
   const progress = Math.min((topGoal.current_amount / topGoal.target_amount) * 100, 100)
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount)
@@ -40,8 +40,8 @@ export function GoalsWidget({ goals }: GoalsWidgetProps) {
         </div>
         <Progress value={progress} className="h-2" />
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{formatCurrency(topGoal.current_amount)}</span>
-          <span>{formatCurrency(topGoal.target_amount)}</span>
+          <span>{formatCurrency(topGoal.current_amount, topGoal.currency)}</span>
+          <span>{formatCurrency(topGoal.target_amount, topGoal.currency)}</span>
         </div>
       </div>
     </Card>

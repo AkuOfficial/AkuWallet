@@ -14,10 +14,10 @@ interface GoalsPreviewProps {
 export function GoalsPreview({ goals }: GoalsPreviewProps) {
   const topGoals = goals.slice(0, 3)
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, currency = 'USD') => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount)
@@ -67,7 +67,7 @@ export function GoalsPreview({ goals }: GoalsPreviewProps) {
                   <Progress value={progress} className="h-2" />
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>
-                      {formatCurrency(goal.current_amount)} / {formatCurrency(goal.target_amount)}
+                      {formatCurrency(goal.current_amount, goal.currency)} / {formatCurrency(goal.target_amount, goal.currency)}
                     </span>
                     {daysRemaining !== null && (
                       <span className={daysRemaining < 30 ? 'text-destructive' : ''}>

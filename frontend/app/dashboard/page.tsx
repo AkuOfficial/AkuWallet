@@ -1,7 +1,6 @@
 import { DashboardOverview } from '@/components/dashboard-overview'
 import { RecentTransactions } from '@/components/recent-transactions'
 import { GoalsPreview } from '@/components/goals-preview'
-import { GoalsWidget } from '@/components/goals-widget'
 import { NetWorthCard } from '@/components/net-worth-card'
 import { GlobalFilterBar } from '@/components/global-filter-bar'
 import type { Category, Tag, Transaction, Goal } from '@/lib/types'
@@ -53,7 +52,6 @@ export default async function DashboardPage({
 
       <DashboardOverview transactions={(transactions as Transaction[]) || []} />
 
-      <GoalsWidget goals={(goals as Goal[]) || []} />
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2">
