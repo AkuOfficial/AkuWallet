@@ -29,7 +29,7 @@ async function getAuthHeader(): Promise<Record<string, string>> {
   }
 }
 
-async function apiRequest<T>(
+export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
@@ -329,6 +329,46 @@ export async function deleteAccount(data: { password?: string; confirm?: string 
     method: 'POST',
     body: JSON.stringify(data),
   })
+}
+
+// Investments
+export async function createInvestment(data: {
+  name: string
+  type: string
+  ticker?: string
+  currency: string
+  invested_amount: number
+  current_value: number
+  quantity?: number
+  is_automated?: boolean
+}): Promise<{ id: string }> {
+  return apiRequest('/investments', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateInvestment(
+  id: string,
+  data: {
+    name: string
+    type: string
+    ticker?: string | null
+    currency: string
+    invested_amount: number
+    current_value: number
+    quantity?: number | null
+    is_automated: boolean
+  }
+): Promise<{ id: string }> {
+  return apiRequest(`/investments/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteInvestment(id: string): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>(`/investments/${id}`, { method: 'DELETE' })
 }
 
 // AI Suggest Category

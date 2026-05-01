@@ -1,10 +1,12 @@
 import secrets
+from decimal import Decimal
 from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from database import db
 from dependencies import get_current_user
 from security import _now_iso
+from services.exchange_rates import convert_amount
 
 router = APIRouter(prefix="/investments", tags=["investments"])
 
@@ -27,6 +29,42 @@ class InvestmentUpdate(BaseModel):
     current_value: float
     quantity: Optional[float] = None
     is_automated: bool
+
+@router.get("/summary")
+async def get_investments_summary(user: dict = Depends(get_current_user)):
+    async with db() as conn:
+        settings_row = await conn.execute(
+            "SELECT base_currency FROM user_settings WHERE user_id = ?", (user["id"],)
+        )
+        settings = await settings_row.fetchone()
+        base_currency = settings["base_currency"] if settings else "USD"
+
+        async with conn.execute(
+            "SELECT currency, invested_amount, current_value, quantity FROM investments WHERE user_id = ?",
+            (user["id"],)
+        ) as cur:
+            rows = await cur.fetchall()
+
+    total_invested = Decimal("0")
+    total_current = Decimal("0")
+    for row in rows:
+        currency = row["currency"] or base_currency
+        qty = row["quantity"]
+        invested = Decimal(str(row["invested_amount"])) * (Decimal(str(qty)) if qty is not None else Decimal("1"))
+        current = Decimal(str(row["current_value"]))
+        total_invested += await convert_amount(invested, currency, base_currency)
+        total_current += await convert_amount(current, currency, base_currency)
+
+    pl = total_current - total_invested
+    pl_percent = float(pl / total_invested * 100) if total_invested > 0 else 0.0
+
+    return {
+        "base_currency": base_currency,
+        "total_invested": float(total_invested),
+        "total_current": float(total_current),
+        "profit_loss": float(pl),
+        "profit_loss_percent": pl_percent,
+    }
 
 @router.get("")
 async def list_investments(user: dict = Depends(get_current_user)):
