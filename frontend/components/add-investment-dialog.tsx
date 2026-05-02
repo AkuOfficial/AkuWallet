@@ -22,10 +22,20 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
   const [isPending, setIsPending] = useState(false)
   const [form, setForm] = useState({
     name: '', type: 'Stock', ticker: '', currency: 'USD',
-    invested_amount: '', current_value: '', quantity: '',
+    invested_amount: '', current_value: '', quantity: '', commission: '0',
   })
 
-  const set = (key: string, value: string) => setForm(f => ({ ...f, [key]: value }))
+  const set = (key: string, value: string) => setForm(f => {
+    const updated = { ...f, [key]: value }
+    if (key === 'invested_amount' || key === 'quantity') {
+      const price = key === 'invested_amount' ? value : updated.invested_amount
+      const qty = key === 'quantity' ? value : updated.quantity
+      if (price) {
+        updated.current_value = qty ? String(parseFloat(qty) * parseFloat(price)) : price
+      }
+    }
+    return updated
+  })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,9 +49,10 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
         invested_amount: parseFloat(form.invested_amount),
         current_value: parseFloat(form.current_value),
         quantity: form.quantity ? parseFloat(form.quantity) : undefined,
+        commission: parseFloat(form.commission) || 0,
       })
       toast.success('Investment added')
-      setForm({ name: '', type: 'Stock', ticker: '', currency: 'USD', invested_amount: '', current_value: '', quantity: '' })
+      setForm({ name: '', type: 'Stock', ticker: '', currency: 'USD', invested_amount: '', current_value: '', quantity: '', commission: '0' })
       setOpen(false)
       onSuccess?.()
     } catch (err) {
@@ -88,14 +99,20 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
+              <Label>Commission</Label>
+              <Input type="number" step="0.01" min="0" placeholder="0" value={form.commission} onChange={e => set('commission', e.target.value)} />
+            </div>
+            <div className="space-y-2">
               <Label>Currency</Label>
               <Select value={form.currency} onValueChange={v => set('currency', v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{CURRENCIES.map(c => <SelectItem key={c.code} value={c.code}>{c.code}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Current Value</Label>
+              <Label>Value</Label>
               <Input type="number" step="0.01" min="0" placeholder="1200" value={form.current_value} onChange={e => set('current_value', e.target.value)} required />
             </div>
           </div>

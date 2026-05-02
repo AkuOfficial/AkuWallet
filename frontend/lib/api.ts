@@ -340,6 +340,7 @@ export async function createInvestment(data: {
   invested_amount: number
   current_value: number
   quantity?: number
+  commission?: number
   is_automated?: boolean
 }): Promise<{ id: string }> {
   return apiRequest('/investments', {
@@ -358,6 +359,7 @@ export async function updateInvestment(
     invested_amount: number
     current_value: number
     quantity?: number | null
+    commission?: number
     is_automated: boolean
   }
 ): Promise<{ id: string }> {

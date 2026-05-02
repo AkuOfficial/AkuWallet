@@ -22,6 +22,7 @@ interface Investment {
   invested_amount: number
   current_value: number
   quantity: number | null
+  commission: number
   is_automated: boolean
 }
 
@@ -42,6 +43,7 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
     invested_amount: investment.invested_amount.toString(),
     current_value: investment.current_value.toString(),
     quantity: investment.quantity?.toString() ?? '',
+    commission: (investment.commission ?? 0).toString(),
   })
 
   useEffect(() => {
@@ -53,6 +55,7 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
       invested_amount: investment.invested_amount.toString(),
       current_value: investment.current_value.toString(),
       quantity: investment.quantity?.toString() ?? '',
+      commission: (investment.commission ?? 0).toString(),
     })
   }, [investment])
 
@@ -70,6 +73,7 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
         invested_amount: parseFloat(form.invested_amount),
         current_value: parseFloat(form.current_value),
         quantity: form.quantity ? parseFloat(form.quantity) : null,
+        commission: parseFloat(form.commission) || 0,
         is_automated: investment.is_automated,
       })
       toast.success('Investment updated')
@@ -116,14 +120,20 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
+              <Label>Commission</Label>
+              <Input type="number" step="0.01" min="0" placeholder="0" value={form.commission} onChange={e => set('commission', e.target.value)} />
+            </div>
+            <div className="space-y-2">
               <Label>Currency</Label>
               <Select value={form.currency} onValueChange={v => set('currency', v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{CURRENCIES.map(c => <SelectItem key={c.code} value={c.code}>{c.code}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Current Value</Label>
+              <Label>Value</Label>
               <Input type="number" step="0.01" min="0" value={form.current_value} onChange={e => set('current_value', e.target.value)} required />
             </div>
           </div>

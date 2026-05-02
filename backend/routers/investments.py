@@ -7,6 +7,7 @@ from database import db
 from dependencies import get_current_user
 from security import _now_iso
 from services.exchange_rates import convert_amount
+from services.market_prices import get_ticker_price
 
 router = APIRouter(prefix="/investments", tags=["investments"])
 
@@ -18,6 +19,7 @@ class InvestmentCreate(BaseModel):
     invested_amount: float
     current_value: float
     quantity: Optional[float] = None
+    commission: float = 0.0
     is_automated: bool = False
 
 class InvestmentUpdate(BaseModel):
@@ -28,7 +30,16 @@ class InvestmentUpdate(BaseModel):
     invested_amount: float
     current_value: float
     quantity: Optional[float] = None
+    commission: float = 0.0
     is_automated: bool
+
+@router.get("/price/{ticker}")
+async def get_investment_price(ticker: str, _: dict = Depends(get_current_user)):
+    price = await get_ticker_price(ticker.upper())
+    if price is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Price not found")
+    return {"ticker": ticker.upper(), "price": float(price)}
 
 @router.get("/summary")
 async def get_investments_summary(user: dict = Depends(get_current_user)):
@@ -82,10 +93,10 @@ async def create_investment(data: InvestmentCreate, user: dict = Depends(get_cur
         investment_id = secrets.token_hex(16)
         await conn.execute(
             """INSERT INTO investments (id, user_id, name, type, ticker, currency, invested_amount, 
-               current_value, quantity, is_automated, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               current_value, quantity, commission, is_automated, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (investment_id, user["id"], data.name, data.type, data.ticker, data.currency,
-             data.invested_amount, data.current_value, data.quantity, int(data.is_automated), _now_iso())
+             data.invested_amount, data.current_value, data.quantity, data.commission, int(data.is_automated), _now_iso())
         )
         await conn.commit()
         return {"id": investment_id, **data.dict(), "created_at": _now_iso()}
@@ -95,10 +106,10 @@ async def update_investment(investment_id: str, data: InvestmentUpdate, user: di
     async with db() as conn:
         await conn.execute(
             """UPDATE investments SET name = ?, type = ?, ticker = ?, currency = ?, invested_amount = ?,
-               current_value = ?, quantity = ?, is_automated = ?, updated_at = ?
+               current_value = ?, quantity = ?, commission = ?, is_automated = ?, updated_at = ?
                WHERE id = ? AND user_id = ?""",
             (data.name, data.type, data.ticker, data.currency, data.invested_amount, data.current_value,
-             data.quantity, int(data.is_automated), _now_iso(), investment_id, user["id"])
+             data.quantity, data.commission, int(data.is_automated), _now_iso(), investment_id, user["id"])
         )
         await conn.commit()
         return {"id": investment_id, **data.dict()}

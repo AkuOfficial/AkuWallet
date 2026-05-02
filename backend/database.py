@@ -199,6 +199,14 @@ async def migrate(conn: aiosqlite.Connection) -> None:
         """
     )
 
+    # Add commission column if missing (migration)
+    cols = await fetchone(conn, "PRAGMA table_info(investments)")
+    async with conn.execute("PRAGMA table_info(investments)") as cur:
+        col_names = [row["name"] async for row in cur]
+    if "commission" not in col_names:
+        await conn.execute("ALTER TABLE investments ADD COLUMN commission REAL NOT NULL DEFAULT 0")
+        await conn.commit()
+
     existing = await fetchone(conn, "SELECT COUNT(1) AS c FROM categories WHERE is_default = 1")
     if (existing["c"] if existing else 0) == 0:
         for c in DEFAULT_CATEGORIES:

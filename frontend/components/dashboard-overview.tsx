@@ -266,9 +266,6 @@ export function DashboardOverview({ transactions }: DashboardOverviewProps) {
                 {fmt(stats.balance)}
               </p>
             </div>
-            <Badge variant="outline" className="text-xs">
-              0.0%
-            </Badge>
           </div>
         </Card>
 
@@ -278,9 +275,6 @@ export function DashboardOverview({ transactions }: DashboardOverviewProps) {
               <p className="text-xs text-muted-foreground">Income</p>
               <p className="text-lg font-bold text-income">{fmt(stats.totalIncome)}</p>
             </div>
-            <Badge variant="outline" className="text-xs">
-              0.0%
-            </Badge>
           </div>
         </Card>
 
@@ -290,9 +284,6 @@ export function DashboardOverview({ transactions }: DashboardOverviewProps) {
               <p className="text-xs text-muted-foreground">Expenses</p>
               <p className="text-lg font-bold text-expense">{fmt(stats.totalExpenses)}</p>
             </div>
-            <Badge variant="outline" className="text-xs">
-              0.0%
-            </Badge>
           </div>
         </Card>
 
