@@ -1,15 +1,27 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { TrendingUp, TrendingDown, Pencil, ChevronDown, ChevronRight } from "lucide-react"
+import { TrendingUp, TrendingDown, Pencil, ChevronDown, ChevronRight, Trash2, Loader2 } from "lucide-react"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { AddInvestmentDialog } from "@/components/add-investment-dialog"
 import { EditInvestmentDialog } from "@/components/edit-investment-dialog"
-import { apiRequest } from "@/lib/api"
+import { apiRequest, deleteInvestment } from "@/lib/api"
+import { toast } from "sonner"
 
 interface Investment {
   id: string
@@ -45,6 +57,7 @@ export default function InvestmentsPage() {
   const [investments, setInvestments] = useState<Investment[]>([])
   const [summary, setSummary] = useState<InvestmentSummary | null>(null)
   const [editing, setEditing] = useState<Investment | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [tickerPrices, setTickerPrices] = useState<Record<string, number>>({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
@@ -67,6 +80,19 @@ export default function InvestmentsPage() {
   }, [fetchTickerPrices])
 
   useEffect(() => { load() }, [load])
+
+  const handleDelete = async (id: string) => {
+    setDeleting(id)
+    try {
+      await deleteInvestment(id)
+      toast.success('Investment deleted')
+      load()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete investment')
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   const calcInvested = (inv: Investment) =>
     inv.quantity != null ? inv.invested_amount * inv.quantity : inv.invested_amount
@@ -98,9 +124,24 @@ export default function InvestmentsPage() {
 
   const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+  // Calculate summary from frontend data to match table calculations
+  const calculatedSummary = useMemo(() => {
+    const totalInv = investments.reduce((s, inv) => s + calcInvested(inv), 0)
+    const totalComm = investments.reduce((s, inv) => s + (inv.commission ?? 0), 0)
+    const totalCurr = investments.reduce((s, inv) => s + getCurrentValue(inv), 0)
+    const pl = totalCurr - totalInv - totalComm
+    const plPercent = totalInv > 0 ? (pl / totalInv) * 100 : 0
+    return {
+      total_invested: totalInv,
+      total_current: totalCurr - totalComm,
+      profit_loss: pl,
+      profit_loss_percent: plPercent
+    }
+  }, [investments, tickerPrices])
+
   const baseCurrency = summary?.base_currency ?? ""
-  const totalPL = summary?.profit_loss ?? 0
-  const totalPLPercent = summary?.profit_loss_percent ?? 0
+  const totalPL = calculatedSummary.profit_loss
+  const totalPLPercent = calculatedSummary.profit_loss_percent
 
   return (
     <div className="container py-6 space-y-6">
@@ -112,11 +153,11 @@ export default function InvestmentsPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader><CardTitle className="text-sm">Total Invested</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{fmt(summary?.total_invested ?? 0)} {baseCurrency}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold">{fmt(calculatedSummary.total_invested)} {baseCurrency}</div></CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle className="text-sm">Current Value</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{fmt(summary?.total_current ?? 0)} {baseCurrency}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold">{fmt(calculatedSummary.total_current)} {baseCurrency}</div></CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle className="text-sm">Profit/Loss</CardTitle></CardHeader>
@@ -132,20 +173,20 @@ export default function InvestmentsPage() {
       <Card>
         <CardHeader><CardTitle>Portfolio</CardTitle></CardHeader>
         <CardContent>
-          <Table className="w-full min-w-[900px] table-fixed">
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-8" />
-                <TableHead className="w-[14%]">Name</TableHead>
-                <TableHead className="w-[9%]">Type</TableHead>
-                <TableHead className="w-[9%]">Ticker</TableHead>
-                <TableHead className="w-[8%]">Currency</TableHead>
-                <TableHead className="w-[9%] text-right">Total Qty</TableHead>
-                <TableHead className="w-[11%] text-right">Price / Unit</TableHead>
-                <TableHead className="w-[12%] text-right">Total Invested</TableHead>
-                <TableHead className="w-[12%] text-right">Value</TableHead>
-                <TableHead className="w-[13%] text-right">P/L</TableHead>
-                <TableHead className="w-[52px]" />
+                <TableHead className="w-[12%]">Name</TableHead>
+                <TableHead className="w-[8%]">Type</TableHead>
+                <TableHead className="w-[7%]">Ticker</TableHead>
+                <TableHead className="w-[7%]">Currency</TableHead>
+                <TableHead className="w-[8%] text-right">Total Qty</TableHead>
+                <TableHead className="w-[10%] text-right">Price / Unit</TableHead>
+                <TableHead className="w-[11%] text-right">Total Invested</TableHead>
+                <TableHead className="w-[10%] text-right">Value</TableHead>
+                <TableHead className="w-[12%] text-right">P/L</TableHead>
+                <TableHead className="w-20" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -185,13 +226,40 @@ export default function InvestmentsPage() {
                       <TableCell className={`text-right ${invPl >= 0 ? "text-green-600" : "text-red-600"}`}>
                         {fmt(invPl)} ({invPlPct.toFixed(2)}%)
                       </TableCell>
-                      <TableCell className="w-[52px] text-right">
-                        <Button
-                          variant="ghost" size="icon"
-                          onClick={e => { e.stopPropagation(); setEditing(inv) }}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
+                      <TableCell className="w-20 text-right">
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost" size="icon"
+                            onClick={e => { e.stopPropagation(); setEditing(inv) }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" onClick={e => e.stopPropagation()}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Investment</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete this investment transaction? This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDelete(inv.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  {deleting === inv.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   )
@@ -221,7 +289,7 @@ export default function InvestmentsPage() {
                     <TableCell className={`text-right ${pl >= 0 ? "text-green-600" : "text-red-600"}`}>
                       {fmt(pl)} ({plPercent.toFixed(2)}%)
                     </TableCell>
-                    <TableCell className="w-[52px]" />
+                    <TableCell className="w-20" />
                   </TableRow>,
                   ...subRows,
                 ]

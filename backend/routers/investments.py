@@ -51,7 +51,7 @@ async def get_investments_summary(user: dict = Depends(get_current_user)):
         base_currency = settings["base_currency"] if settings else "USD"
 
         async with conn.execute(
-            "SELECT currency, invested_amount, current_value, quantity FROM investments WHERE user_id = ?",
+            "SELECT currency, invested_amount, current_value, quantity, commission FROM investments WHERE user_id = ?",
             (user["id"],)
         ) as cur:
             rows = await cur.fetchall()
@@ -61,10 +61,11 @@ async def get_investments_summary(user: dict = Depends(get_current_user)):
     for row in rows:
         currency = row["currency"] or base_currency
         qty = row["quantity"]
+        commission = Decimal(str(row["commission"] or 0))
         invested = Decimal(str(row["invested_amount"])) * (Decimal(str(qty)) if qty is not None else Decimal("1"))
         current = Decimal(str(row["current_value"]))
         total_invested += await convert_amount(invested, currency, base_currency)
-        total_current += await convert_amount(current, currency, base_currency)
+        total_current += await convert_amount(current - commission, currency, base_currency)
 
     pl = total_current - total_invested
     pl_percent = float(pl / total_invested * 100) if total_invested > 0 else 0.0
