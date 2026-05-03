@@ -14,11 +14,17 @@ router = fastapi.APIRouter(prefix="/auth", tags=["auth"])
 async def signup(data: AuthRequest):
     user_id = secrets.token_hex(16)
     pw_hash = hash_password(data.password)
+    now = _now_iso()
     async with db() as conn:
         try:
             await conn.execute(
                 "INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
-                (user_id, data.email.lower().strip(), pw_hash, _now_iso()),
+                (user_id, data.email.lower().strip(), pw_hash, now),
+            )
+            await conn.execute(
+                """INSERT INTO accounts (id, user_id, name, type, currency, balance, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (secrets.token_hex(16), user_id, "Default Account", "Checking", "USD", 0, now),
             )
             await conn.commit()
         except Exception:

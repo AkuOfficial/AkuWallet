@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -47,6 +47,20 @@ export function AddTransactionDialog({ categories, tags, baseCurrency = 'USD', o
   const [currency, setCurrency] = useState(baseCurrency)
   const [isSuggesting, setIsSuggesting] = useState(false)
   const [suggestedCategory, setSuggestedCategory] = useState<string | null>(null)
+  const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([])
+  const [accountId, setAccountId] = useState('')
+
+  useEffect(() => {
+    fetch('/api/accounts', { headers: { Authorization: `Bearer ${document.cookie.match(/(?:^|;\s*)aku_token=([^;]+)/)?.[1] || ''}` } })
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setAccounts(data)
+          if (data[0]?.id) setAccountId(data[0].id)
+        }
+      })
+      .catch(() => setAccounts([]))
+  }, [])
 
   const filteredCategories = categories.filter(c => c.type === type)
 
@@ -78,6 +92,7 @@ export function AddTransactionDialog({ categories, tags, baseCurrency = 'USD', o
         recurrence,
         recurrence_end_date: recurrenceEndDate || undefined,
         tag_ids: selectedTags,
+        account_id: accountId || undefined,
       })
       
       toast.success('Transaction added successfully')
@@ -236,6 +251,15 @@ export function AddTransactionDialog({ categories, tags, baseCurrency = 'USD', o
                     {category.name}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Account</Label>
+            <Select value={accountId} onValueChange={setAccountId}>
+              <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+              <SelectContent>
+                {accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

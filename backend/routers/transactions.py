@@ -109,6 +109,14 @@ async def create_transaction(
     tx_id = secrets.token_hex(16)
     created_at = _now_iso()
     async with db() as conn:
+        account_id = data.account_id
+        if not account_id:
+            default_account = await fetchone(
+                conn,
+                "SELECT id FROM accounts WHERE user_id = ? ORDER BY created_at ASC LIMIT 1",
+                (user["id"],),
+            )
+            account_id = default_account["id"] if default_account else None
         await conn.execute(
             """
             INSERT INTO transactions (
@@ -116,7 +124,7 @@ async def create_transaction(
               recurrence, recurrence_end_date, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (tx_id, user["id"], data.account_id, data.type, float(data.amount), data.currency,
+            (tx_id, user["id"], account_id, data.type, float(data.amount), data.currency,
              data.description, data.category_id, data.date, data.recurrence, data.recurrence_end_date, created_at),
         )
         for tag_id in data.tag_ids:
@@ -127,7 +135,7 @@ async def create_transaction(
         await conn.commit()
 
     return {
-        "id": tx_id, "user_id": user["id"], "account_id": data.account_id, "type": data.type,
+        "id": tx_id, "user_id": user["id"], "account_id": account_id, "type": data.type,
         "amount": float(data.amount), "currency": data.currency,
         "description": data.description, "category_id": data.category_id, "date": data.date,
         "recurrence": data.recurrence, "recurrence_end_date": data.recurrence_end_date,

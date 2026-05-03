@@ -16,6 +16,10 @@ async def import_transactions(
     user=fastapi.Depends(get_current_user),
 ):
     async with db() as conn:
+        default_account = await conn.execute_fetchone(
+            "SELECT id FROM accounts WHERE user_id = ? ORDER BY created_at ASC LIMIT 1",
+            (user["id"],),
+        )
         rows = await conn.execute_fetchall(
             "SELECT * FROM categories WHERE (user_id = ?) OR (is_default = 1)",
             (user["id"],),
@@ -38,11 +42,11 @@ async def import_transactions(
                 await conn.execute(
                     """
                     INSERT INTO transactions (
-                      id, user_id, type, amount, description, category_id,
+                      id, user_id, account_id, type, amount, description, category_id,
                       date, recurrence, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'none', ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'none', ?)
                     """,
-                    (tx_id, user["id"], tx.type, float(tx.amount),
+                    (tx_id, user["id"], tx.account_id or (default_account["id"] if default_account else None), tx.type, float(tx.amount),
                      tx.description, category_id, tx.date, _now_iso()),
                 )
                 results["success"] += 1

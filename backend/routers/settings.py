@@ -24,10 +24,10 @@ async def get_settings(user: dict = Depends(get_current_user)):
             return dict(row)
         await conn.execute(
             "INSERT INTO user_settings (user_id, base_currency, created_at) VALUES (?, ?, ?)",
-            (user["id"], "PLN", _now_iso())
+            (user["id"], "USD", _now_iso())
         )
         await conn.commit()
-        return {"user_id": user["id"], "base_currency": "PLN"}
+        return {"user_id": user["id"], "base_currency": "USD"}
 
 @router.put("")
 async def update_settings(data: UserSettingsUpdate, user: dict = Depends(get_current_user)):

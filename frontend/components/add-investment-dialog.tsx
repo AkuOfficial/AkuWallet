@@ -23,7 +23,9 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
   const [form, setForm] = useState({
     name: '', type: 'Stock', ticker: '', currency: 'USD',
     invested_amount: '', current_value: '', quantity: '', commission: '0',
+    linked_account_id: '',
   })
+  const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([])
 
   const calculateValue = (price: string, qty: string, comm: string) => {
     if (!price) return ''
@@ -44,6 +46,18 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
     }
     return updated
   })
+
+  useEffect(() => {
+    if (!open) return
+    fetch('/api/accounts', { headers: { Authorization: `Bearer ${document.cookie.match(/(?:^|;\s*)aku_token=([^;]+)/)?.[1] || ''}` } })
+      .then(r => r.json())
+      .then(data => {
+        const list = Array.isArray(data) ? data : []
+        setAccounts(list)
+        setForm(f => ({ ...f, linked_account_id: list[0]?.id || '' }))
+      })
+      .catch(() => setAccounts([]))
+  }, [open])
 
   useEffect(() => {
     if (!form.ticker) return
@@ -82,9 +96,10 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
         current_value: parseFloat(form.current_value),
         quantity: form.quantity ? parseFloat(form.quantity) : undefined,
         commission: parseFloat(form.commission) || 0,
+        linked_account_id: form.linked_account_id,
       })
       toast.success('Investment added')
-      setForm({ name: '', type: 'Stock', ticker: '', currency: 'USD', invested_amount: '', current_value: '', quantity: '', commission: '0' })
+      setForm({ name: '', type: 'Stock', ticker: '', currency: 'USD', invested_amount: '', current_value: '', quantity: '', commission: '0', linked_account_id: '' })
       setOpen(false)
       onSuccess?.()
     } catch (err) {
@@ -119,14 +134,23 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
               <Input placeholder="e.g. AAPL" value={form.ticker} onChange={e => set('ticker', e.target.value)} />
             </div>
           </div>
+          <div className="space-y-2">
+            <Label>Linked Account</Label>
+            <Select value={form.linked_account_id} onValueChange={v => set('linked_account_id', v)}>
+              <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+              <SelectContent>
+                {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Price / Unit</Label>
-              <Input type="number" step="0.01" min="0" placeholder="1000" value={form.invested_amount} onChange={e => set('invested_amount', e.target.value)} required />
+              <Input type="number" step="0.01" min="0" placeholder="0" value={form.invested_amount} onChange={e => set('invested_amount', e.target.value)} required />
             </div>
             <div className="space-y-2">
               <Label>Quantity (optional)</Label>
-              <Input type="number" step="any" min="0" placeholder="10" value={form.quantity} onChange={e => set('quantity', e.target.value)} />
+              <Input type="number" step="any" min="0" placeholder="1" value={form.quantity} onChange={e => set('quantity', e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -142,15 +166,13 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Value</Label>
-              <Input type="number" step="0.01" min="0" placeholder="1200" value={form.current_value} onChange={e => set('current_value', e.target.value)} required />
-            </div>
+          <div className="space-y-2">
+            <Label>Value</Label>
+            <Input type="number" step="0.01" min="0" placeholder="0" value={form.current_value} onChange={e => set('current_value', e.target.value)} required />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending || !form.linked_account_id}>
               {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Adding...</> : <><Plus className="mr-2 h-4 w-4" />Add</>}
             </Button>
           </div>

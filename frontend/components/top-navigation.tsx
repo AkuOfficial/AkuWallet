@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "./ui/button"
 import {
@@ -33,6 +33,12 @@ const NAV_ITEMS = [
 
 export function TopNavigation() {
   const pathname = usePathname()
+  const router = useRouter()
+
+  const handleSignOut = async () => {
+    document.cookie = "aku_token=; Path=/; Max-Age=0; SameSite=Lax"
+    router.push("/auth/login")
+  }
 
   return (
     <>
@@ -89,7 +95,7 @@ export function TopNavigation() {
                     Settings
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>Logout</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleSignOut}>Logout</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

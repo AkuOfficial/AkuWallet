@@ -83,6 +83,7 @@ export async function createTransaction(data: {
   type: TransactionType
   amount: number
   currency?: string
+  account_id?: string
   description?: string
   category_id?: string
   date: string
@@ -342,8 +343,19 @@ export async function createInvestment(data: {
   quantity?: number
   commission?: number
   is_automated?: boolean
+  linked_account_id?: string
 }): Promise<{ id: string }> {
   return apiRequest('/investments', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function sellInvestment(
+  id: string,
+  data: { account_id: string; quantity: number; price: number; commission?: number; currency?: string }
+): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>(`/investments/${id}/sell`, {
     method: 'POST',
     body: JSON.stringify(data),
   })

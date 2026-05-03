@@ -44,8 +44,18 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
     current_value: investment.current_value.toString(),
     quantity: investment.quantity?.toString() ?? '',
     commission: (investment.commission ?? 0).toString(),
+    linked_account_id: '',
   })
+  const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([])
   const [prevTicker, setPrevTicker] = useState(investment.ticker ?? '')
+
+  useEffect(() => {
+    if (!open) return
+    fetch('/api/accounts', { headers: { Authorization: `Bearer ${document.cookie.match(/(?:^|;\s*)aku_token=([^;]+)/)?.[1] || ''}` } })
+      .then(r => r.json())
+      .then(data => setAccounts(Array.isArray(data) ? data : []))
+      .catch(() => setAccounts([]))
+  }, [open])
 
   useEffect(() => {
     setForm({
@@ -57,6 +67,7 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
       current_value: investment.current_value.toString(),
       quantity: investment.quantity?.toString() ?? '',
       commission: (investment.commission ?? 0).toString(),
+      linked_account_id: '',
     })
     setPrevTicker(investment.ticker ?? '')
   }, [investment])
@@ -176,11 +187,19 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Value</Label>
-              <Input type="number" step="0.01" min="0" value={form.current_value} onChange={e => set('current_value', e.target.value)} required />
-            </div>
+          <div className="space-y-2">
+            <Label>Linked Account</Label>
+            <Select value={form.linked_account_id} onValueChange={v => set('linked_account_id', v === 'none' ? '' : v)}>
+              <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Value</Label>
+            <Input type="number" step="0.01" min="0" value={form.current_value} onChange={e => set('current_value', e.target.value)} required />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

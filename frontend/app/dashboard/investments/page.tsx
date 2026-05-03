@@ -21,6 +21,7 @@ import {
 import { AddInvestmentDialog } from "@/components/add-investment-dialog"
 import { EditInvestmentDialog } from "@/components/edit-investment-dialog"
 import { apiRequest, deleteInvestment } from "@/lib/api"
+import { SellInvestmentDialog } from "@/components/sell-investment-dialog"
 import { toast } from "sonner"
 
 interface Investment {
@@ -93,6 +94,7 @@ export default function InvestmentsPage() {
       setDeleting(null)
     }
   }
+
 
   const calcInvested = (inv: Investment) =>
     inv.quantity != null ? inv.invested_amount * inv.quantity : inv.invested_amount
@@ -234,6 +236,9 @@ export default function InvestmentsPage() {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
+                          <div onClick={e => e.stopPropagation()}>
+                            <SellInvestmentDialog investment={inv} onSuccess={load} />
+                          </div>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button variant="ghost" size="icon" onClick={e => e.stopPropagation()}>
