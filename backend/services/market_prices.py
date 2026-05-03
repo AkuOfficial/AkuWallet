@@ -28,3 +28,21 @@ async def get_ticker_price(ticker: str) -> Decimal | None:
             return price
     except Exception:
         return None
+
+async def get_ticker_info(ticker: str) -> dict | None:
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}",
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=5.0,
+            )
+            data = response.json()
+            meta = data["chart"]["result"][0]["meta"]
+            return {
+                "price": float(meta["regularMarketPrice"]),
+                "currency": meta.get("currency", "USD"),
+                "name": meta.get("longName") or meta.get("shortName") or ticker
+            }
+    except Exception:
+        return None

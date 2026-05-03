@@ -383,3 +383,7 @@ export async function suggestCategory(data: {
     body: JSON.stringify(data),
   })
 }
+
+export async function getTickerPrice(ticker: string): Promise<{ ticker: string; price: number; currency: string; name: string }> {
+  return apiRequest(`/investments/price/${ticker}`)
+}

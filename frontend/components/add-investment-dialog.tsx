@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { createInvestment } from '@/lib/api'
+import { createInvestment, getTickerPrice } from '@/lib/api'
 import { CURRENCIES } from '@/lib/currencies'
 
 const INVESTMENT_TYPES = ['Stock', 'ETF', 'Crypto', 'Bond', 'Real Estate', 'Commodity', 'Other']
@@ -25,17 +25,49 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
     invested_amount: '', current_value: '', quantity: '', commission: '0',
   })
 
+  const calculateValue = (price: string, qty: string, comm: string) => {
+    if (!price) return ''
+    const p = parseFloat(price)
+    const q = qty ? parseFloat(qty) : 1
+    const c = comm ? parseFloat(comm) : 0
+    return String(p * q + c)
+  }
+
   const set = (key: string, value: string) => setForm(f => {
     const updated = { ...f, [key]: value }
-    if (key === 'invested_amount' || key === 'quantity') {
-      const price = key === 'invested_amount' ? value : updated.invested_amount
-      const qty = key === 'quantity' ? value : updated.quantity
-      if (price) {
-        updated.current_value = qty ? String(parseFloat(qty) * parseFloat(price)) : price
-      }
+    if (['invested_amount', 'quantity', 'commission'].includes(key)) {
+      updated.current_value = calculateValue(
+        updated.invested_amount,
+        updated.quantity,
+        updated.commission
+      )
     }
     return updated
   })
+
+  useEffect(() => {
+    if (!form.ticker) return
+    const timer = setTimeout(async () => {
+      try {
+        const data = await getTickerPrice(form.ticker)
+        setForm(f => {
+          const updated = {
+            ...f,
+            name: data.name,
+            invested_amount: data.price.toString(),
+            currency: data.currency
+          }
+          updated.current_value = calculateValue(
+            updated.invested_amount,
+            updated.quantity,
+            updated.commission
+          )
+          return updated
+        })
+      } catch {}
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [form.ticker])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

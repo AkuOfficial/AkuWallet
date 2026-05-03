@@ -7,7 +7,7 @@ from database import db
 from dependencies import get_current_user
 from security import _now_iso
 from services.exchange_rates import convert_amount
-from services.market_prices import get_ticker_price
+from services.market_prices import get_ticker_price, get_ticker_info
 
 router = APIRouter(prefix="/investments", tags=["investments"])
 
@@ -35,11 +35,11 @@ class InvestmentUpdate(BaseModel):
 
 @router.get("/price/{ticker}")
 async def get_investment_price(ticker: str, _: dict = Depends(get_current_user)):
-    price = await get_ticker_price(ticker.upper())
-    if price is None:
+    info = await get_ticker_info(ticker.upper())
+    if info is None:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Price not found")
-    return {"ticker": ticker.upper(), "price": float(price)}
+    return {"ticker": ticker.upper(), **info}
 
 @router.get("/summary")
 async def get_investments_summary(user: dict = Depends(get_current_user)):
