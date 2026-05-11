@@ -24,6 +24,7 @@ interface Investment {
   quantity: number | null
   commission: number
   is_automated: boolean
+  linked_account_id?: string | null
 }
 
 interface Props {
@@ -44,7 +45,7 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
     current_value: investment.current_value.toString(),
     quantity: investment.quantity?.toString() ?? '',
     commission: (investment.commission ?? 0).toString(),
-    linked_account_id: '',
+    linked_account_id: investment.linked_account_id ?? '',
   })
   const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([])
   const [prevTicker, setPrevTicker] = useState(investment.ticker ?? '')
@@ -53,7 +54,14 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
     if (!open) return
     fetch('/api/accounts', { headers: { Authorization: `Bearer ${document.cookie.match(/(?:^|;\s*)aku_token=([^;]+)/)?.[1] || ''}` } })
       .then(r => r.json())
-      .then(data => setAccounts(Array.isArray(data) ? data : []))
+      .then(data => {
+        const list = Array.isArray(data) ? data : []
+        setAccounts(list)
+        setForm(f => {
+          if (f.linked_account_id) return f
+          return { ...f, linked_account_id: list[0]?.id ?? '' }
+        })
+      })
       .catch(() => setAccounts([]))
   }, [open])
 
@@ -67,7 +75,7 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
       current_value: investment.current_value.toString(),
       quantity: investment.quantity?.toString() ?? '',
       commission: (investment.commission ?? 0).toString(),
-      linked_account_id: '',
+      linked_account_id: investment.linked_account_id ?? '',
     })
     setPrevTicker(investment.ticker ?? '')
   }, [investment])
@@ -77,8 +85,10 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
     const p = parseFloat(price)
     const q = qty ? parseFloat(qty) : 1
     const c = comm ? parseFloat(comm) : 0
-    return String(p * q + c)
+    return (Math.round((p * q + c) * 100) / 100).toFixed(2)
   }
+
+  const formatTickerPrice = (price: number) => price.toFixed(2)
 
   const set = (key: string, value: string) => setForm(f => {
     const updated = { ...f, [key]: value }
@@ -102,7 +112,7 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
           const updated = {
             ...f,
             name: data.name,
-            invested_amount: data.price.toString(),
+            invested_amount: formatTickerPrice(data.price),
             currency: data.currency
           }
           updated.current_value = calculateValue(
@@ -121,15 +131,21 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
     e.preventDefault()
     setIsPending(true)
     try {
+      const currentValue = parseFloat(form.current_value)
+      if (!Number.isFinite(currentValue) || !/^\d+(\.\d{1,2})?$/.test(form.current_value)) {
+        toast.error('Value can have at most 2 decimal places')
+        return
+      }
       await updateInvestment(investment.id, {
         name: form.name,
         type: form.type,
         ticker: form.ticker || null,
         currency: form.currency,
         invested_amount: parseFloat(form.invested_amount),
-        current_value: parseFloat(form.current_value),
+        current_value: currentValue,
         quantity: form.quantity ? parseFloat(form.quantity) : null,
         commission: parseFloat(form.commission) || 0,
+        linked_account_id: form.linked_account_id || null,
         is_automated: investment.is_automated,
       })
       toast.success('Investment updated')
@@ -171,7 +187,7 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
             </div>
             <div className="space-y-2">
               <Label>Quantity (optional)</Label>
-              <Input type="number" step="any" min="0" value={form.quantity} onChange={e => set('quantity', e.target.value)} />
+              <Input type="number" step="0.01" min="0.01" value={form.quantity} onChange={e => set('quantity', e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -189,10 +205,9 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
           </div>
           <div className="space-y-2">
             <Label>Linked Account</Label>
-            <Select value={form.linked_account_id} onValueChange={v => set('linked_account_id', v === 'none' ? '' : v)}>
-              <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+            <Select value={form.linked_account_id} onValueChange={v => set('linked_account_id', v)}>
+              <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">None</SelectItem>
                 {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
               </SelectContent>
             </Select>

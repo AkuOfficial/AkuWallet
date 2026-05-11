@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Loader2 } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Plus, Loader2, CircleHelp } from 'lucide-react'
 import { toast } from 'sonner'
 import { createInvestment, getTickerPrice } from '@/lib/api'
 import { CURRENCIES } from '@/lib/currencies'
@@ -26,14 +27,17 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
     linked_account_id: '',
   })
   const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([])
+  const [showAccountError, setShowAccountError] = useState(false)
 
   const calculateValue = (price: string, qty: string, comm: string) => {
     if (!price) return ''
     const p = parseFloat(price)
     const q = qty ? parseFloat(qty) : 1
     const c = comm ? parseFloat(comm) : 0
-    return String(p * q + c)
+    return (Math.round((p * q + c) * 100) / 100).toFixed(2)
   }
+
+  const formatTickerPrice = (price: number) => price.toFixed(2)
 
   const set = (key: string, value: string) => setForm(f => {
     const updated = { ...f, [key]: value }
@@ -68,7 +72,7 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
           const updated = {
             ...f,
             name: data.name,
-            invested_amount: data.price.toString(),
+            invested_amount: formatTickerPrice(data.price),
             currency: data.currency
           }
           updated.current_value = calculateValue(
@@ -85,21 +89,32 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!form.linked_account_id) {
+      setShowAccountError(true)
+      toast.error('Linked Account is required')
+      return
+    }
     setIsPending(true)
     try {
+      const currentValue = parseFloat(form.current_value)
+      if (!Number.isFinite(currentValue) || !/^\d+(\.\d{1,2})?$/.test(form.current_value)) {
+        toast.error('Value can have at most 2 decimal places')
+        return
+      }
       await createInvestment({
         name: form.name,
         type: form.type,
         ticker: form.ticker || undefined,
         currency: form.currency,
         invested_amount: parseFloat(form.invested_amount),
-        current_value: parseFloat(form.current_value),
+        current_value: currentValue,
         quantity: form.quantity ? parseFloat(form.quantity) : undefined,
         commission: parseFloat(form.commission) || 0,
         linked_account_id: form.linked_account_id,
       })
       toast.success('Investment added')
       setForm({ name: '', type: 'Stock', ticker: '', currency: 'USD', invested_amount: '', current_value: '', quantity: '', commission: '0', linked_account_id: '' })
+      setShowAccountError(false)
       setOpen(false)
       onSuccess?.()
     } catch (err) {
@@ -130,18 +145,37 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Ticker (optional)</Label>
+              <div className="flex items-center gap-1">
+                <Label>Ticker (optional)</Label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                      <CircleHelp className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-64">
+                    Enter a symbol (e.g., AAPL) to auto-fill asset name, price, and currency via Yahoo Finance.
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               <Input placeholder="e.g. AAPL" value={form.ticker} onChange={e => set('ticker', e.target.value)} />
             </div>
           </div>
           <div className="space-y-2">
             <Label>Linked Account</Label>
-            <Select value={form.linked_account_id} onValueChange={v => set('linked_account_id', v)}>
-              <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+            <Select value={form.linked_account_id} onValueChange={v => { set('linked_account_id', v); setShowAccountError(false) }}>
+              <SelectTrigger
+                className={showAccountError && !form.linked_account_id ? 'border-destructive focus-visible:ring-destructive' : ''}
+              >
+                <SelectValue placeholder="Select account" />
+              </SelectTrigger>
               <SelectContent>
                 {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            {showAccountError && !form.linked_account_id ? (
+              <p className="text-sm text-destructive">Linked Account is required.</p>
+            ) : null}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -150,7 +184,7 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
             </div>
             <div className="space-y-2">
               <Label>Quantity (optional)</Label>
-              <Input type="number" step="any" min="0" placeholder="1" value={form.quantity} onChange={e => set('quantity', e.target.value)} />
+              <Input type="number" step="0.01" min="0.01" placeholder="1" value={form.quantity} onChange={e => set('quantity', e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -172,7 +206,7 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={isPending || !form.linked_account_id}>
+            <Button type="submit" disabled={isPending}>
               {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Adding...</> : <><Plus className="mr-2 h-4 w-4" />Add</>}
             </Button>
           </div>

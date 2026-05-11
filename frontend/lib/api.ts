@@ -344,7 +344,7 @@ export async function createInvestment(data: {
   commission?: number
   is_automated?: boolean
   linked_account_id?: string
-}): Promise<{ id: string }> {
+}): Promise<{ id: string; transaction_id?: string | null }> {
   return apiRequest('/investments', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -354,7 +354,7 @@ export async function createInvestment(data: {
 export async function sellInvestment(
   id: string,
   data: { account_id: string; quantity: number; price: number; commission?: number; currency?: string }
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; transaction_id?: string }> {
   return apiRequest<{ success: boolean }>(`/investments/${id}/sell`, {
     method: 'POST',
     body: JSON.stringify(data),
@@ -372,6 +372,7 @@ export async function updateInvestment(
     current_value: number
     quantity?: number | null
     commission?: number
+    linked_account_id?: string | null
     is_automated: boolean
   }
 ): Promise<{ id: string }> {

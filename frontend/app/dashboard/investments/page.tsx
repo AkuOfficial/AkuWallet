@@ -114,7 +114,7 @@ export default function InvestmentsPage() {
       acc[inv.name].transactions.push(inv)
       return acc
     }, {})
-  )
+  ).filter((group) => group.transactions.reduce((s, inv) => s + (inv.quantity ?? 1), 0) > 0)
 
   const toggleExpand = (name: string) => {
     setExpanded(prev => {
@@ -196,7 +196,7 @@ export default function InvestmentsPage() {
                 const isExpanded = expanded.has(group.name)
                 const totalInv = group.transactions.reduce((s, inv) => s + calcInvested(inv), 0)
                 const totalCommission = group.transactions.reduce((s, inv) => s + (inv.commission ?? 0), 0)
-                const totalQty = group.transactions.reduce((s, inv) => s + (inv.quantity ?? 0), 0)
+                const totalQty = group.transactions.reduce((s, inv) => s + (inv.quantity ?? 1), 0)
                 const livePrice = group.ticker ? tickerPrices[group.ticker] : undefined
                 const currentVal = livePrice != null && totalQty > 0
                   ? livePrice * totalQty
@@ -216,7 +216,7 @@ export default function InvestmentsPage() {
                       <TableCell>{inv.type}</TableCell>
                       <TableCell>{inv.ticker || "-"}</TableCell>
                       <TableCell>{inv.currency}</TableCell>
-                      <TableCell className="text-right">{inv.quantity != null ? inv.quantity.toLocaleString() : "-"}</TableCell>
+                      <TableCell className="text-right">{(inv.quantity ?? 1).toLocaleString()}</TableCell>
                       <TableCell className="text-right">{fmt(inv.invested_amount)}</TableCell>
                       <TableCell className="text-right">
                         {fmt(invTotal)}
@@ -236,9 +236,6 @@ export default function InvestmentsPage() {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <div onClick={e => e.stopPropagation()}>
-                            <SellInvestmentDialog investment={inv} onSuccess={load} />
-                          </div>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button variant="ghost" size="icon" onClick={e => e.stopPropagation()}>
@@ -294,7 +291,15 @@ export default function InvestmentsPage() {
                     <TableCell className={`text-right ${pl >= 0 ? "text-green-600" : "text-red-600"}`}>
                       {fmt(pl)} ({plPercent.toFixed(2)}%)
                     </TableCell>
-                    <TableCell className="w-20" />
+                    <TableCell className="w-20">
+                      <div className="flex items-center justify-end" onClick={e => e.stopPropagation()}>
+                        <SellInvestmentDialog
+                          investment={group.transactions[0]}
+                          maxUnits={totalQty}
+                          onSuccess={load}
+                        />
+                      </div>
+                    </TableCell>
                   </TableRow>,
                   ...subRows,
                 ]

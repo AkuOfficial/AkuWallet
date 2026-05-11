@@ -2,7 +2,7 @@ import secrets
 
 import fastapi
 
-from database import db
+from database import db, fetchone
 from dependencies import get_current_user
 from models import ImportedTransaction
 from security import _now_iso
@@ -16,7 +16,8 @@ async def import_transactions(
     user=fastapi.Depends(get_current_user),
 ):
     async with db() as conn:
-        default_account = await conn.execute_fetchone(
+        default_account = await fetchone(
+            conn,
             "SELECT id FROM accounts WHERE user_id = ? ORDER BY created_at ASC LIMIT 1",
             (user["id"],),
         )

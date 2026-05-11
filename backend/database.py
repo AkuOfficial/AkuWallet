@@ -20,6 +20,7 @@ DEFAULT_CATEGORIES: list[dict[str, Any]] = [
     {"name": "Personal Care", "type": "expense", "icon": "Sparkles", "color": "#F472B6"},
     {"name": "Home", "type": "expense", "icon": "Home", "color": "#84CC16"},
     {"name": "Subscriptions", "type": "expense", "icon": "RefreshCw", "color": "#8B5CF6"},
+    {"name": "Investments", "type": "expense", "icon": "TrendingUp", "color": "#14B8A6"},
     # Income
     {"name": "Salary", "type": "income", "icon": "Briefcase", "color": "#22C55E"},
     {"name": "Freelance", "type": "income", "icon": "Laptop", "color": "#3B82F6"},
@@ -166,10 +167,13 @@ async def migrate(conn: aiosqlite.Connection) -> None:
           invested_amount REAL NOT NULL,
           current_value REAL NOT NULL,
           quantity REAL,
+          commission REAL NOT NULL DEFAULT 0,
+          linked_account_id TEXT,
           is_automated INTEGER NOT NULL DEFAULT 0,
           created_at TEXT NOT NULL,
           updated_at TEXT,
-          FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+          FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY(linked_account_id) REFERENCES accounts(id) ON DELETE SET NULL
         );
 
         CREATE TABLE IF NOT EXISTS exchange_rates (
@@ -199,22 +203,19 @@ async def migrate(conn: aiosqlite.Connection) -> None:
         """
     )
 
-    # Add commission column if missing (migration)
-    cols = await fetchone(conn, "PRAGMA table_info(investments)")
-    async with conn.execute("PRAGMA table_info(investments)") as cur:
-        col_names = [row["name"] async for row in cur]
-    if "commission" not in col_names:
-        await conn.execute("ALTER TABLE investments ADD COLUMN commission REAL NOT NULL DEFAULT 0")
-        await conn.commit()
-
-    existing = await fetchone(conn, "SELECT COUNT(1) AS c FROM categories WHERE is_default = 1")
-    if (existing["c"] if existing else 0) == 0:
-        for c in DEFAULT_CATEGORIES:
-            await conn.execute(
-                """
-                INSERT INTO categories (id, user_id, name, type, icon, color, is_default, created_at)
-                VALUES (?, NULL, ?, ?, ?, ?, 1, ?)
-                """,
-                (secrets.token_hex(16), c["name"], c["type"], c.get("icon"), c.get("color"), _now_iso()),
-            )
+    for c in DEFAULT_CATEGORIES:
+        existing_default = await fetchone(
+            conn,
+            "SELECT id FROM categories WHERE is_default = 1 AND name = ? AND type = ? LIMIT 1",
+            (c["name"], c["type"]),
+        )
+        if existing_default:
+            continue
+        await conn.execute(
+            """
+            INSERT INTO categories (id, user_id, name, type, icon, color, is_default, created_at)
+            VALUES (?, NULL, ?, ?, ?, ?, 1, ?)
+            """,
+            (secrets.token_hex(16), c["name"], c["type"], c.get("icon"), c.get("color"), _now_iso()),
+        )
     await conn.commit()
