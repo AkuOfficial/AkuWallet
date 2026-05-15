@@ -28,6 +28,8 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
   })
   const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([])
   const [showAccountError, setShowAccountError] = useState(false)
+  const resolvedLinkedAccountId =
+    form.linked_account_id || (accounts.length === 1 ? accounts[0].id : '')
 
   const calculateValue = (price: string, qty: string, comm: string) => {
     if (!price) return ''
@@ -55,9 +57,18 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
     fetch('/api/accounts', { headers: { Authorization: `Bearer ${document.cookie.match(/(?:^|;\s*)aku_token=([^;]+)/)?.[1] || ''}` } })
       .then(r => r.json())
       .then(data => {
-        const list = Array.isArray(data) ? data : []
+        const list = (Array.isArray(data) ? data : []).map((a) => ({
+          id: String(a.id),
+          name: String(a.name ?? ''),
+        }))
         setAccounts(list)
-        setForm(f => ({ ...f, linked_account_id: list[0]?.id || '' }))
+        setForm(f => {
+          if (list.length === 1) {
+            return { ...f, linked_account_id: list[0].id }
+          }
+          const currentStillExists = list.some((a) => a.id === f.linked_account_id)
+          return { ...f, linked_account_id: currentStillExists ? f.linked_account_id : '' }
+        })
       })
       .catch(() => setAccounts([]))
   }, [open])
@@ -88,7 +99,7 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.linked_account_id) {
+    if (!resolvedLinkedAccountId) {
       setShowAccountError(true)
       toast.error('Linked Account is required')
       return
@@ -109,7 +120,7 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
         current_value: currentValue,
         quantity: form.quantity ? parseFloat(form.quantity) : undefined,
         commission: parseFloat(form.commission) || 0,
-        linked_account_id: form.linked_account_id,
+        linked_account_id: resolvedLinkedAccountId,
       })
       toast.success('Investment added')
       setForm({ name: '', type: 'Stock', ticker: '', currency: 'USD', invested_amount: '', current_value: '', quantity: '', commission: '0', linked_account_id: '' })
@@ -160,22 +171,6 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
               <Input placeholder="e.g. AAPL" value={form.ticker} onChange={e => set('ticker', e.target.value)} />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label>Linked Account</Label>
-            <Select value={form.linked_account_id} onValueChange={v => { set('linked_account_id', v); setShowAccountError(false) }}>
-              <SelectTrigger
-                className={showAccountError && !form.linked_account_id ? 'border-destructive focus-visible:ring-destructive' : ''}
-              >
-                <SelectValue placeholder="Select account" />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {showAccountError && !form.linked_account_id ? (
-              <p className="text-sm text-destructive">Linked Account is required.</p>
-            ) : null}
-          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Price / Unit</Label>
@@ -200,8 +195,24 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
             </div>
           </div>
           <div className="space-y-2">
+            <Label>Linked Account</Label>
+            <Select value={resolvedLinkedAccountId} onValueChange={v => { set('linked_account_id', v); setShowAccountError(false) }}>
+              <SelectTrigger
+                className={showAccountError && !resolvedLinkedAccountId ? 'border-destructive focus-visible:ring-destructive' : ''}
+              >
+                <SelectValue placeholder="Select account" />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {showAccountError && !resolvedLinkedAccountId ? (
+              <p className="text-sm text-destructive">Linked Account is required.</p>
+            ) : null}
+          </div>
+          <div className="space-y-2">
             <Label>Value</Label>
-            <Input type="number" step="0.01" min="0" placeholder="0" value={form.current_value} onChange={e => set('current_value', e.target.value)} required />
+            <Input type="number" step="0.01" min="0" placeholder="0" value={form.current_value} readOnly disabled required />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>

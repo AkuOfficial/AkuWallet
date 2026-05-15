@@ -62,8 +62,8 @@ class InvestmentUpdate(BaseModel):
     def validate_quantity(cls, value: Optional[float]) -> Optional[float]:
         if value is None:
             return value
-        if value <= 0:
-            raise ValueError("Quantity must be greater than 0")
+        if value == 0:
+            raise ValueError("Quantity must not be 0")
         quantized = Decimal(str(value)).quantize(Decimal("0.01"))
         if quantized != Decimal(str(value)):
             raise ValueError("Quantity can have at most 2 decimal places")
@@ -72,8 +72,6 @@ class InvestmentUpdate(BaseModel):
     @field_validator("current_value")
     @classmethod
     def validate_current_value(cls, value: float) -> float:
-        if value < 0:
-            raise ValueError("Value must be greater than or equal to 0")
         quantized = Decimal(str(value)).quantize(Decimal("0.01"))
         if quantized != Decimal(str(value)):
             raise ValueError("Value can have at most 2 decimal places")
@@ -338,6 +336,44 @@ async def sell_investment(investment_id: str, data: InvestmentSell, user: dict =
 @router.put("/{investment_id}")
 async def update_investment(investment_id: str, data: InvestmentUpdate, user: dict = Depends(get_current_user)):
     async with db() as conn:
+        existing_inv = await fetchone(
+            conn,
+            "SELECT * FROM investments WHERE id = ? AND user_id = ?",
+            (investment_id, user["id"]),
+        )
+        if not existing_inv:
+            raise HTTPException(status_code=404, detail="Investment not found")
+
+        if data.quantity is not None and data.quantity < 0:
+            async with conn.execute(
+                """
+                SELECT COALESCE(SUM(COALESCE(quantity, 1)), 0) AS total_qty
+                FROM investments
+                WHERE user_id = ?
+                  AND id != ?
+                  AND name = ?
+                  AND type = ?
+                  AND COALESCE(ticker, '') = COALESCE(?, '')
+                  AND currency = ?
+                  AND COALESCE(linked_account_id, '') = COALESCE(?, '')
+                """,
+                (
+                    user["id"],
+                    investment_id,
+                    data.name,
+                    data.type,
+                    data.ticker,
+                    data.currency,
+                    data.linked_account_id,
+                ),
+            ) as cur:
+                qty_row = await cur.fetchone()
+            other_qty = Decimal(str(qty_row["total_qty"] if qty_row and qty_row["total_qty"] is not None else 0)).quantize(Decimal("0.01"))
+            max_sell_qty = other_qty if other_qty > 0 else Decimal("0")
+            requested_sell_qty = abs(Decimal(str(data.quantity)).quantize(Decimal("0.01")))
+            if requested_sell_qty > max_sell_qty:
+                raise HTTPException(status_code=400, detail=f"Quantity exceeds available units for this asset/account. Max sell quantity: {max_sell_qty}")
+
         await conn.execute(
             """UPDATE investments SET name = ?, type = ?, ticker = ?, currency = ?, invested_amount = ?,
                current_value = ?, quantity = ?, commission = ?, linked_account_id = ?, is_automated = ?, updated_at = ?

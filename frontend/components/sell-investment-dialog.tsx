@@ -31,6 +31,13 @@ export function SellInvestmentDialog({
   const [quantity, setQuantity] = useState(String(availableUnits > 0 ? availableUnits : minUnits))
   const [price, setPrice] = useState(String(investment.invested_amount))
   const [commission, setCommission] = useState('0')
+  const value = (() => {
+    const qty = Number.parseFloat(quantity)
+    const unitPrice = Number.parseFloat(price)
+    const comm = Number.parseFloat(commission) || 0
+    if (!Number.isFinite(qty) || !Number.isFinite(unitPrice)) return '0.00'
+    return (Math.round((qty * unitPrice - comm) * 100) / 100).toFixed(2)
+  })()
 
   const normalizeUnits = (value: string) => {
     const n = Number(value)
@@ -43,9 +50,17 @@ export function SellInvestmentDialog({
     if (!open) return
     const defaultQty = availableUnits > 0 ? availableUnits : minUnits
     setQuantity(defaultQty.toFixed(2).replace(/\.?0+$/, ''))
+    setAccountId(investment.linked_account_id ?? '')
+    setShowAccountError(false)
     fetch('/api/accounts', { headers: { Authorization: `Bearer ${document.cookie.match(/(?:^|;\s*)aku_token=([^;]+)/)?.[1] || ''}` } })
       .then(r => r.json())
-      .then(data => setAccounts(Array.isArray(data) ? data : []))
+      .then(data => {
+        const list = Array.isArray(data) ? data : []
+        setAccounts(list)
+        if (investment.linked_account_id && list.some((a) => a.id === investment.linked_account_id)) {
+          setAccountId(investment.linked_account_id)
+        }
+      })
       .catch(() => setAccounts([]))
   }, [open])
 
@@ -123,6 +138,7 @@ export function SellInvestmentDialog({
             <div className="space-y-2"><Label>Price / Unit</Label><Input type="number" step="0.01" min="0.01" value={price} onChange={e => setPrice(e.target.value)} required /></div>
           </div>
           <div className="space-y-2"><Label>Commission</Label><Input type="number" step="0.01" min="0" value={commission} onChange={e => setCommission(e.target.value)} /></div>
+          <div className="space-y-2"><Label>Value</Label><Input type="number" step="0.01" value={value} readOnly disabled /></div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={isPending}>

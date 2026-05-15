@@ -136,7 +136,7 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
     setIsPending(true)
     try {
       const currentValue = parseFloat(form.current_value)
-      if (!Number.isFinite(currentValue) || !/^\d+(\.\d{1,2})?$/.test(form.current_value)) {
+      if (!Number.isFinite(currentValue) || !/^-?\d+(\.\d{1,2})?$/.test(form.current_value)) {
         toast.error('Value can have at most 2 decimal places')
         return
       }
@@ -230,7 +230,7 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
           </div>
           <div className="space-y-2">
             <Label>Value</Label>
-            <Input type="number" step="0.01" min="0" value={form.current_value} onChange={e => set('current_value', e.target.value)} required />
+            <Input type="number" step="0.01" value={form.current_value} readOnly disabled required />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
