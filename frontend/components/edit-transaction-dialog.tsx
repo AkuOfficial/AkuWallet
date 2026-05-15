@@ -60,7 +60,10 @@ export function EditTransactionDialog({
   )
   const [currency, setCurrency] = useState(transaction.currency || baseCurrency)
 
-  const filteredCategories = categories.filter(c => c.type === type)
+  const filteredCategories = categories.filter(c => c.type === type && c.name !== 'Investments')
+  const isInvestmentsTransaction = categories.some(
+    c => c.id === transaction.category_id && c.name === 'Investments'
+  )
 
   useEffect(() => {
     setType(transaction.type)
@@ -80,14 +83,16 @@ export function EditTransactionDialog({
     
     try {
       await updateTransaction(transaction.id, {
-        type,
-        amount: parseFloat(amount),
-        currency,
+        type: isInvestmentsTransaction ? transaction.type : type,
+        amount: isInvestmentsTransaction ? transaction.amount : parseFloat(amount),
+        currency: isInvestmentsTransaction ? transaction.currency : currency,
         description: description || undefined,
-        category_id: categoryId || undefined,
-        date,
-        recurrence,
-        recurrence_end_date: recurrenceEndDate || undefined,
+        category_id: isInvestmentsTransaction ? transaction.category_id || undefined : categoryId || undefined,
+        date: isInvestmentsTransaction ? transaction.date.split('T')[0] : date,
+        recurrence: isInvestmentsTransaction ? transaction.recurrence : recurrence,
+        recurrence_end_date: isInvestmentsTransaction
+          ? transaction.recurrence_end_date?.split('T')[0] || undefined
+          : recurrenceEndDate || undefined,
         tag_ids: selectedTags,
       })
       
@@ -117,14 +122,23 @@ export function EditTransactionDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Tabs value={type} onValueChange={(v) => {
+            if (isInvestmentsTransaction) return
             setType(v as TransactionType)
             setCategoryId('')
           }}>
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="expense" className="data-[state=active]:bg-expense/10 data-[state=active]:text-expense">
+              <TabsTrigger
+                value="expense"
+                disabled={isInvestmentsTransaction}
+                className="data-[state=active]:bg-expense/10 data-[state=active]:text-expense"
+              >
                 Expense
               </TabsTrigger>
-              <TabsTrigger value="income" className="data-[state=active]:bg-income/10 data-[state=active]:text-income">
+              <TabsTrigger
+                value="income"
+                disabled={isInvestmentsTransaction}
+                className="data-[state=active]:bg-income/10 data-[state=active]:text-income"
+              >
                 Income
               </TabsTrigger>
             </TabsList>
@@ -143,9 +157,10 @@ export function EditTransactionDialog({
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   required
+                  disabled={isInvestmentsTransaction}
                   className="flex-1"
                 />
-                <Select value={currency} onValueChange={setCurrency}>
+                <Select value={currency} onValueChange={setCurrency} disabled={isInvestmentsTransaction}>
                   <SelectTrigger className="w-24">
                     <SelectValue />
                   </SelectTrigger>
@@ -166,6 +181,7 @@ export function EditTransactionDialog({
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
+                disabled={isInvestmentsTransaction}
               />
             </div>
           </div>
@@ -182,11 +198,18 @@ export function EditTransactionDialog({
 
           <div className="space-y-2">
             <Label htmlFor="edit-category">Category</Label>
-            <Select value={categoryId} onValueChange={setCategoryId}>
+            <Select
+              value={categoryId}
+              onValueChange={setCategoryId}
+              disabled={isInvestmentsTransaction}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select category" />
               </SelectTrigger>
               <SelectContent>
+                {isInvestmentsTransaction && categoryId ? (
+                  <SelectItem value={categoryId}>Investments</SelectItem>
+                ) : null}
                 {filteredCategories.map((category) => (
                   <SelectItem key={category.id} value={category.id}>
                     {category.name}
@@ -200,7 +223,7 @@ export function EditTransactionDialog({
             <div className="space-y-2">
               <Label htmlFor="edit-recurrence">Recurrence</Label>
               <Select value={recurrence} onValueChange={(v) => setRecurrence(v as RecurrenceType)}>
-                <SelectTrigger>
+                <SelectTrigger disabled={isInvestmentsTransaction}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -222,6 +245,7 @@ export function EditTransactionDialog({
                   value={recurrenceEndDate}
                   onChange={(e) => setRecurrenceEndDate(e.target.value)}
                   min={date}
+                  disabled={isInvestmentsTransaction}
                 />
               </div>
             )}

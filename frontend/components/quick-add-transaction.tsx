@@ -39,7 +39,7 @@ export function QuickAddTransaction({ categories, tags, onSuccess }: QuickAddTra
   const [isSuggesting, setIsSuggesting] = useState(false)
   const [suggestedCategoryName, setSuggestedCategoryName] = useState<string | null>(null)
 
-  const filteredCategories = categories.filter(c => c.type === type)
+  const filteredCategories = categories.filter(c => c.type === type && c.name !== 'Investments')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

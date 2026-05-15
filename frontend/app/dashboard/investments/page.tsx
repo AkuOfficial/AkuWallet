@@ -23,6 +23,8 @@ import { EditInvestmentDialog } from "@/components/edit-investment-dialog"
 import { apiRequest, deleteInvestment } from "@/lib/api"
 import { SellInvestmentDialog } from "@/components/sell-investment-dialog"
 import { toast } from "sonner"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 
 interface Investment {
   id: string
@@ -35,6 +37,7 @@ interface Investment {
   quantity: number | null
   commission: number
   is_automated: boolean
+  linked_account_id: string | null
   created_at: string
 }
 
@@ -47,11 +50,15 @@ interface InvestmentSummary {
 }
 
 interface GroupedAsset {
+  key: string
   name: string
   type: string
   ticker: string | null
   currency: string
+  linkedAccountId: string | null
   transactions: Investment[]
+  isCurrent: boolean
+  currentTransactionIds: string[]
 }
 
 export default function InvestmentsPage() {
@@ -61,6 +68,8 @@ export default function InvestmentsPage() {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [tickerPrices, setTickerPrices] = useState<Record<string, number>>({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [accountsById, setAccountsById] = useState<Record<string, string>>({})
+  const [showHistory, setShowHistory] = useState(false)
 
   const fetchTickerPrices = useCallback((invs: Investment[]) => {
     const tickers = [...new Set(invs.map(i => i.ticker).filter(Boolean) as string[])]
@@ -72,13 +81,22 @@ export default function InvestmentsPage() {
   }, [])
 
   const load = useCallback(() => {
-    apiRequest<Investment[]>("/investments")
+    apiRequest<Investment[]>(`/investments${showHistory ? "?show_history=true" : ""}`)
       .then(invs => { setInvestments(invs); fetchTickerPrices(invs) })
       .catch(() => setInvestments([]))
     apiRequest<InvestmentSummary>("/investments/summary")
       .then(setSummary)
       .catch(() => setSummary(null))
-  }, [fetchTickerPrices])
+    apiRequest<Array<{ id: string; name: string }>>("/accounts")
+      .then((accounts) => {
+        const mapped = accounts.reduce<Record<string, string>>((acc, account) => {
+          acc[account.id] = account.name
+          return acc
+        }, {})
+        setAccountsById(mapped)
+      })
+      .catch(() => setAccountsById({}))
+  }, [fetchTickerPrices, showHistory])
 
   useEffect(() => { load() }, [load])
 
@@ -96,8 +114,11 @@ export default function InvestmentsPage() {
   }
 
 
-  const calcInvested = (inv: Investment) =>
+  const calcInvestedBase = (inv: Investment) =>
     inv.quantity != null ? inv.invested_amount * inv.quantity : inv.invested_amount
+
+  const calcInvested = (inv: Investment) =>
+    calcInvestedBase(inv) + (inv.commission ?? 0)
 
   const getCurrentValue = (inv: Investment) => {
     const livePrice = inv.ticker ? tickerPrices[inv.ticker] : undefined
@@ -106,20 +127,55 @@ export default function InvestmentsPage() {
       : livePrice != null ? livePrice : inv.current_value
   }
 
-  const grouped: GroupedAsset[] = Object.values(
-    investments.reduce<Record<string, GroupedAsset>>((acc, inv) => {
-      if (!acc[inv.name]) {
-        acc[inv.name] = { name: inv.name, type: inv.type, ticker: inv.ticker, currency: inv.currency, transactions: [] }
-      }
-      acc[inv.name].transactions.push(inv)
-      return acc
-    }, {})
-  ).filter((group) => group.transactions.reduce((s, inv) => s + (inv.quantity ?? 1), 0) > 0)
+  const grouped: GroupedAsset[] = useMemo(() => {
+    const groups = Object.values(
+      investments.reduce<Record<string, GroupedAsset>>((acc, inv) => {
+        const groupKey = `${inv.name}::${inv.linked_account_id ?? "no-account"}`
+        if (!acc[groupKey]) {
+          acc[groupKey] = {
+            key: groupKey,
+            name: inv.name,
+            type: inv.type,
+            ticker: inv.ticker,
+            currency: inv.currency,
+            linkedAccountId: inv.linked_account_id,
+            transactions: [],
+            isCurrent: false,
+            currentTransactionIds: [],
+          }
+        }
+        acc[groupKey].transactions.push(inv)
+        return acc
+      }, {})
+    )
 
-  const toggleExpand = (name: string) => {
+    return groups
+      .map((group) => {
+        const chronological = [...group.transactions].sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        )
+        let runningQty = 0
+        let lastFlatIndex = -1
+        chronological.forEach((inv, index) => {
+          runningQty += inv.quantity ?? 1
+          if (runningQty <= 0) lastFlatIndex = index
+        })
+        const cycle = chronological.slice(lastFlatIndex + 1)
+        const currentQty = cycle.reduce((s, inv) => s + (inv.quantity ?? 1), 0)
+        const isCurrent = currentQty > 0
+        const currentTransactionIds = cycle.map((inv) => inv.id)
+        const transactions = showHistory
+          ? [...chronological].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          : cycle.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        return { ...group, transactions, isCurrent, currentTransactionIds }
+      })
+      .filter((group) => showHistory || group.isCurrent)
+  }, [investments, showHistory])
+
+  const toggleExpand = (groupKey: string) => {
     setExpanded(prev => {
       const next = new Set(prev)
-      next.has(name) ? next.delete(name) : next.add(name)
+      next.has(groupKey) ? next.delete(groupKey) : next.add(groupKey)
       return next
     })
   }
@@ -129,13 +185,12 @@ export default function InvestmentsPage() {
   // Calculate summary from frontend data to match table calculations
   const calculatedSummary = useMemo(() => {
     const totalInv = investments.reduce((s, inv) => s + calcInvested(inv), 0)
-    const totalComm = investments.reduce((s, inv) => s + (inv.commission ?? 0), 0)
     const totalCurr = investments.reduce((s, inv) => s + getCurrentValue(inv), 0)
-    const pl = totalCurr - totalInv - totalComm
+    const pl = totalCurr - totalInv
     const plPercent = totalInv > 0 ? (pl / totalInv) * 100 : 0
     return {
       total_invested: totalInv,
-      total_current: totalCurr - totalComm,
+      total_current: totalCurr,
       profit_loss: pl,
       profit_loss_percent: plPercent
     }
@@ -175,11 +230,16 @@ export default function InvestmentsPage() {
       <Card>
         <CardHeader><CardTitle>Portfolio</CardTitle></CardHeader>
         <CardContent>
+          <div className="mb-4 flex items-center gap-2">
+            <Switch id="show-history" checked={showHistory} onCheckedChange={setShowHistory} />
+            <Label htmlFor="show-history">Show history</Label>
+          </div>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-8" />
                 <TableHead className="w-[12%]">Name</TableHead>
+                <TableHead className="w-[10%]">Account</TableHead>
                 <TableHead className="w-[8%]">Type</TableHead>
                 <TableHead className="w-[7%]">Ticker</TableHead>
                 <TableHead className="w-[7%]">Currency</TableHead>
@@ -193,38 +253,40 @@ export default function InvestmentsPage() {
             </TableHeader>
             <TableBody>
               {grouped.map((group) => {
-                const isExpanded = expanded.has(group.name)
+                const isExpanded = expanded.has(group.key)
                 const totalInv = group.transactions.reduce((s, inv) => s + calcInvested(inv), 0)
-                const totalCommission = group.transactions.reduce((s, inv) => s + (inv.commission ?? 0), 0)
                 const totalQty = group.transactions.reduce((s, inv) => s + (inv.quantity ?? 1), 0)
                 const livePrice = group.ticker ? tickerPrices[group.ticker] : undefined
                 const currentVal = livePrice != null && totalQty > 0
                   ? livePrice * totalQty
                   : group.transactions.reduce((s, inv) => s + getCurrentValue(inv), 0)
-                const pl = currentVal - totalInv - totalCommission
+                const pl = currentVal - totalInv
                 const plPercent = totalInv > 0 ? (pl / totalInv) * 100 : 0
 
                 const subRows = isExpanded ? group.transactions.map((inv) => {
+                  const isHistoricalTxn = showHistory && !group.currentTransactionIds.includes(inv.id)
+                  const invBaseTotal = calcInvestedBase(inv)
                   const invTotal = calcInvested(inv)
                   const invCurrent = getCurrentValue(inv)
-                  const invPl = invCurrent - invTotal - (inv.commission ?? 0)
+                  const invPl = invCurrent - invTotal
                   const invPlPct = invTotal > 0 ? (invPl / invTotal) * 100 : 0
                   return (
-                    <TableRow key={inv.id} className="bg-muted/30 text-sm">
+                    <TableRow key={inv.id} className={`bg-muted/30 text-sm ${isHistoricalTxn ? "opacity-50" : ""}`}>
                       <TableCell />
                       <TableCell className="pl-6 text-muted-foreground">{new Date(inv.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell />
                       <TableCell>{inv.type}</TableCell>
                       <TableCell>{inv.ticker || "-"}</TableCell>
                       <TableCell>{inv.currency}</TableCell>
                       <TableCell className="text-right">{(inv.quantity ?? 1).toLocaleString()}</TableCell>
                       <TableCell className="text-right">{fmt(inv.invested_amount)}</TableCell>
                       <TableCell className="text-right">
-                        {fmt(invTotal)}
+                        {fmt(invBaseTotal)}
                         {(inv.commission ?? 0) > 0 && (
                           <span className="text-muted-foreground text-xs ml-1">(+{fmt(inv.commission)} comm.)</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">{fmt(invCurrent - (inv.commission ?? 0))}</TableCell>
+                      <TableCell className="text-right">{fmt(invCurrent)}</TableCell>
                       <TableCell className={`text-right ${invPl >= 0 ? "text-green-600" : "text-red-600"}`}>
                         {fmt(invPl)} ({invPlPct.toFixed(2)}%)
                       </TableCell>
@@ -269,9 +331,9 @@ export default function InvestmentsPage() {
 
                 return [
                   <TableRow
-                    key={group.name}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => toggleExpand(group.name)}
+                    key={group.key}
+                    className={`cursor-pointer hover:bg-muted/50 ${group.isCurrent ? "" : "opacity-50"}`}
+                    onClick={() => toggleExpand(group.key)}
                   >
                     <TableCell>
                       {isExpanded
@@ -279,6 +341,7 @@ export default function InvestmentsPage() {
                         : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                     </TableCell>
                     <TableCell className="font-medium">{group.name}</TableCell>
+                    <TableCell>{group.linkedAccountId ? (accountsById[group.linkedAccountId] ?? "Unknown") : "-"}</TableCell>
                     <TableCell>{group.type}</TableCell>
                     <TableCell>{group.ticker || "-"}</TableCell>
                     <TableCell>{group.currency}</TableCell>
@@ -287,17 +350,19 @@ export default function InvestmentsPage() {
                       {livePrice != null ? fmt(livePrice) : "-"}
                     </TableCell>
                     <TableCell className="text-right">{fmt(totalInv)}</TableCell>
-                    <TableCell className="text-right">{fmt(currentVal - totalCommission)}</TableCell>
+                    <TableCell className="text-right">{fmt(currentVal)}</TableCell>
                     <TableCell className={`text-right ${pl >= 0 ? "text-green-600" : "text-red-600"}`}>
                       {fmt(pl)} ({plPercent.toFixed(2)}%)
                     </TableCell>
                     <TableCell className="w-20">
                       <div className="flex items-center justify-end" onClick={e => e.stopPropagation()}>
-                        <SellInvestmentDialog
-                          investment={group.transactions[0]}
-                          maxUnits={totalQty}
-                          onSuccess={load}
-                        />
+                        {group.isCurrent ? (
+                          <SellInvestmentDialog
+                            investment={group.transactions[0]}
+                            maxUnits={totalQty}
+                            onSuccess={load}
+                          />
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>,

@@ -96,6 +96,17 @@ class InvestmentSell(BaseModel):
             raise ValueError("Quantity can have at most 2 decimal places")
         return value
 
+
+async def _get_investments_category_id(conn, user_id: str, tx_type: str) -> str:
+    row = await fetchone(
+        conn,
+        "SELECT id FROM categories WHERE name = ? AND type = ? AND ((user_id = ?) OR (is_default = 1)) ORDER BY is_default ASC LIMIT 1",
+        ("Investments", tx_type, user_id),
+    )
+    if not row:
+        raise HTTPException(status_code=500, detail=f"Investments {tx_type} category not found")
+    return row["id"]
+
 @router.get("/price/{ticker}")
 async def get_investment_price(ticker: str, _: dict = Depends(get_current_user)):
     info = await get_ticker_info(ticker.upper())
@@ -128,7 +139,7 @@ async def get_investments_summary(user: dict = Depends(get_current_user)):
         invested = Decimal(str(row["invested_amount"])) * (Decimal(str(qty)) if qty is not None else Decimal("1"))
         current = Decimal(str(row["current_value"]))
         total_invested += await convert_amount(invested, currency, base_currency)
-        total_current += await convert_amount(current - commission, currency, base_currency)
+        total_current += await convert_amount(current, currency, base_currency)
 
     pl = total_current - total_invested
     pl_percent = float(pl / total_invested * 100) if total_invested > 0 else 0.0
@@ -142,14 +153,14 @@ async def get_investments_summary(user: dict = Depends(get_current_user)):
     }
 
 @router.get("")
-async def list_investments(user: dict = Depends(get_current_user)):
+async def list_investments(show_history: bool = False, user: dict = Depends(get_current_user)):
     async with db() as conn:
         async with conn.execute(
             "SELECT * FROM investments WHERE user_id = ? ORDER BY created_at ASC",
             (user["id"],)
         ) as cur:
             rows = await cur.fetchall()
-            grouped: dict[tuple[str, str, str, str], list[dict]] = {}
+            grouped: dict[tuple[str, str, str, str, str], list[dict]] = {}
             for row in rows:
                 item = dict(row)
                 key = (
@@ -157,6 +168,7 @@ async def list_investments(user: dict = Depends(get_current_user)):
                     item["type"],
                     item["ticker"] or "",
                     item["currency"],
+                    item["linked_account_id"] or "",
                 )
                 grouped.setdefault(key, []).append(item)
 
@@ -172,6 +184,11 @@ async def list_investments(user: dict = Depends(get_current_user)):
                 cycle_qty = sum(float(i["quantity"]) if i["quantity"] is not None else 1.0 for i in cycle)
                 if cycle_qty > 0:
                     active.extend(cycle)
+
+            if show_history:
+                all_rows = [dict(r) for r in rows]
+                all_rows.sort(key=lambda x: x["created_at"], reverse=True)
+                return all_rows
 
             active.sort(key=lambda x: x["created_at"], reverse=True)
             return active
@@ -213,13 +230,7 @@ async def create_investment(data: InvestmentCreate, user: dict = Depends(get_cur
             total = gross + Decimal(str(data.commission or 0))
             tx_amount = await convert_amount(total, data.currency, account["currency"])
 
-            category = await fetchone(
-                conn,
-                "SELECT id FROM categories WHERE name = ? AND type = ? AND ((user_id = ?) OR (is_default = 1)) ORDER BY is_default ASC LIMIT 1",
-                ("Investments", "expense", user["id"]),
-            )
-            if not category:
-                raise HTTPException(status_code=500, detail="Investments expense category not found for investment purchase transaction")
+            category_id = await _get_investments_category_id(conn, user["id"], "expense")
 
             await conn.execute(
                 """
@@ -230,8 +241,16 @@ async def create_investment(data: InvestmentCreate, user: dict = Depends(get_cur
                 """,
                 (
                     (created_transaction_id := secrets.token_hex(16)), user["id"], account["id"], "expense", float(tx_amount), account["currency"],
-                    f"Purchase: {data.name} ({(data.ticker or '').upper() or '-'})", category["id"], now.split("T")[0], "none", None, now
+                    f"Purchase: {data.name} ({(data.ticker or '').upper() or '-'})", category_id, now.split("T")[0], "none", None, now
                 ),
+            )
+            await conn.execute(
+                "UPDATE investments SET linked_transaction_id = ? WHERE id = ? AND user_id = ?",
+                (created_transaction_id, investment_id, user["id"]),
+            )
+            await conn.execute(
+                "UPDATE transactions SET linked_investment_id = ? WHERE id = ? AND user_id = ?",
+                (investment_id, created_transaction_id, user["id"]),
             )
         await conn.commit()
         return {"id": investment_id, "transaction_id": created_transaction_id, **data.dict(), "created_at": now}
@@ -261,8 +280,9 @@ async def sell_investment(investment_id: str, data: InvestmentSell, user: dict =
               AND type = ?
               AND COALESCE(ticker, '') = COALESCE(?, '')
               AND currency = ?
+              AND COALESCE(linked_account_id, '') = COALESCE(?, '')
             """,
-            (user["id"], inv["name"], inv["type"], inv["ticker"], inv["currency"]),
+            (user["id"], inv["name"], inv["type"], inv["ticker"], inv["currency"], inv["linked_account_id"]),
         ) as cur:
             qty_row = await cur.fetchone()
         available_qty_dec = Decimal(str(qty_row["total_qty"] if qty_row and qty_row["total_qty"] is not None else 0)).quantize(Decimal("0.01"))
@@ -283,13 +303,7 @@ async def sell_investment(investment_id: str, data: InvestmentSell, user: dict =
         net = gross - Decimal(str(data.commission or 0))
         tx_amount = await convert_amount(net, sale_currency, account["currency"])
 
-        income_category = await fetchone(
-            conn,
-            "SELECT id FROM categories WHERE name = ? AND type = ? AND ((user_id = ?) OR (is_default = 1)) ORDER BY is_default ASC LIMIT 1",
-            ("Investments", "income", user["id"]),
-        )
-        if not income_category:
-            raise HTTPException(status_code=500, detail="Investments income category not found for investment sell transaction")
+        income_category_id = await _get_investments_category_id(conn, user["id"], "income")
 
         await conn.execute(
             """
@@ -300,18 +314,23 @@ async def sell_investment(investment_id: str, data: InvestmentSell, user: dict =
             """,
             (
                 created_transaction_id, user["id"], account["id"], "income", float(tx_amount), account["currency"],
-                f"Sell: {inv['name']} ({(inv['ticker'] or '').upper() or '-'})", income_category["id"], now.split("T")[0], "none", None, now
+                f"Sell: {inv['name']} ({(inv['ticker'] or '').upper() or '-'})", income_category_id, now.split("T")[0], "none", None, now
             ),
         )
 
+        sell_inv_id = secrets.token_hex(16)
         await conn.execute(
             """INSERT INTO investments (id, user_id, name, type, ticker, currency, invested_amount,
-               current_value, quantity, commission, is_automated, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               current_value, quantity, commission, linked_account_id, linked_transaction_id, is_automated, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                secrets.token_hex(16), user["id"], inv["name"], inv["type"], inv["ticker"], sale_currency,
-                data.price, -abs(data.price * data.quantity - data.commission), -abs(data.quantity), data.commission, 0, now
+                sell_inv_id, user["id"], inv["name"], inv["type"], inv["ticker"], sale_currency,
+                data.price, -abs(data.price * data.quantity - data.commission), -abs(data.quantity), data.commission, data.account_id, created_transaction_id, 0, now
             ),
+        )
+        await conn.execute(
+            "UPDATE transactions SET linked_investment_id = ? WHERE id = ? AND user_id = ?",
+            (sell_inv_id, created_transaction_id, user["id"]),
         )
         await conn.commit()
         return {"success": True, "transaction_id": created_transaction_id}
@@ -326,12 +345,50 @@ async def update_investment(investment_id: str, data: InvestmentUpdate, user: di
             (data.name, data.type, data.ticker, data.currency, data.invested_amount, data.current_value,
              data.quantity, data.commission, data.linked_account_id, int(data.is_automated), _now_iso(), investment_id, user["id"])
         )
+        if data.linked_account_id:
+            account = await fetchone(
+                conn,
+                "SELECT id, currency FROM accounts WHERE id = ? AND user_id = ?",
+                (data.linked_account_id, user["id"]),
+            )
+            if not account:
+                raise HTTPException(status_code=400, detail="Linked account not found")
+        existing = await fetchone(conn, "SELECT linked_transaction_id FROM investments WHERE id = ? AND user_id = ?", (investment_id, user["id"]))
+        if existing and existing["linked_transaction_id"]:
+            tx_id = existing["linked_transaction_id"]
+            tx_row = await fetchone(conn, "SELECT id, currency, account_id, type FROM transactions WHERE id = ? AND user_id = ?", (tx_id, user["id"]))
+            if tx_row:
+                account_currency = tx_row["currency"]
+                account_id = tx_row["account_id"]
+                if data.linked_account_id:
+                    account_row = await fetchone(conn, "SELECT id, currency FROM accounts WHERE id = ? AND user_id = ?", (data.linked_account_id, user["id"]))
+                    if account_row:
+                        account_id = account_row["id"]
+                        account_currency = account_row["currency"]
+                qty = data.quantity if data.quantity is not None else 1.0
+                gross = Decimal(str(data.invested_amount)) * Decimal(str(qty))
+                total = gross + Decimal(str(data.commission or 0))
+                tx_amount = await convert_amount(total, data.currency, account_currency)
+                tx_type = "expense" if data.quantity is None or data.quantity >= 0 else "income"
+                category_id = await _get_investments_category_id(conn, user["id"], tx_type)
+                description_prefix = "Purchase" if tx_type == "expense" else "Sell"
+                await conn.execute(
+                    """
+                    UPDATE transactions
+                    SET account_id = ?, type = ?, amount = ?, currency = ?, description = ?, category_id = ?, date = ?, updated_at = ?
+                    WHERE id = ? AND user_id = ?
+                    """,
+                    (account_id, tx_type, float(tx_amount), account_currency, f"{description_prefix}: {data.name} ({(data.ticker or '').upper() or '-'})", category_id, _now_iso().split("T")[0], _now_iso(), tx_id, user["id"]),
+                )
         await conn.commit()
         return {"id": investment_id, **data.dict()}
 
 @router.delete("/{investment_id}")
 async def delete_investment(investment_id: str, user: dict = Depends(get_current_user)):
     async with db() as conn:
+        row = await fetchone(conn, "SELECT linked_transaction_id FROM investments WHERE id = ? AND user_id = ?", (investment_id, user["id"]))
         await conn.execute("DELETE FROM investments WHERE id = ? AND user_id = ?", (investment_id, user["id"]))
+        if row and row["linked_transaction_id"]:
+            await conn.execute("DELETE FROM transactions WHERE id = ? AND user_id = ?", (row["linked_transaction_id"], user["id"]))
         await conn.commit()
         return {"success": True}

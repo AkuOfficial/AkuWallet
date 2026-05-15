@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Save, Loader2 } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Save, Loader2, CircleHelp } from 'lucide-react'
 import { toast } from 'sonner'
 import { updateInvestment, getTickerPrice } from '@/lib/api'
 import { CURRENCIES } from '@/lib/currencies'
@@ -35,6 +36,9 @@ interface Props {
 }
 
 export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess }: Props) {
+  const getQuantityValue = (qty: number | null | undefined) =>
+    qty === null || qty === undefined ? '1' : String(qty)
+
   const [isPending, setIsPending] = useState(false)
   const [form, setForm] = useState({
     name: investment.name,
@@ -43,7 +47,7 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
     currency: investment.currency,
     invested_amount: investment.invested_amount.toString(),
     current_value: investment.current_value.toString(),
-    quantity: investment.quantity?.toString() ?? '',
+    quantity: getQuantityValue(investment.quantity),
     commission: (investment.commission ?? 0).toString(),
     linked_account_id: investment.linked_account_id ?? '',
   })
@@ -66,6 +70,7 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
   }, [open])
 
   useEffect(() => {
+    if (!open) return
     setForm({
       name: investment.name,
       type: investment.type,
@@ -73,19 +78,18 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
       currency: investment.currency,
       invested_amount: investment.invested_amount.toString(),
       current_value: investment.current_value.toString(),
-      quantity: investment.quantity?.toString() ?? '',
+      quantity: getQuantityValue(investment.quantity),
       commission: (investment.commission ?? 0).toString(),
       linked_account_id: investment.linked_account_id ?? '',
     })
     setPrevTicker(investment.ticker ?? '')
-  }, [investment])
+  }, [investment.id, open])
 
   const calculateValue = (price: string, qty: string, comm: string) => {
     if (!price) return ''
     const p = parseFloat(price)
     const q = qty ? parseFloat(qty) : 1
-    const c = comm ? parseFloat(comm) : 0
-    return (Math.round((p * q + c) * 100) / 100).toFixed(2)
+    return (Math.round((p * q) * 100) / 100).toFixed(2)
   }
 
   const formatTickerPrice = (price: number) => price.toFixed(2)
@@ -167,7 +171,7 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
             <Label>Name</Label>
             <Input value={form.name} onChange={e => set('name', e.target.value)} required />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 items-end">
             <div className="space-y-2">
               <Label>Type</Label>
               <Select value={form.type} onValueChange={v => set('type', v)}>
@@ -176,7 +180,19 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Ticker (optional)</Label>
+              <div className="flex items-center gap-1">
+                <Label>Ticker (optional)</Label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                      <CircleHelp className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-64">
+                    Enter a symbol (e.g., AAPL) to auto-fill asset name, price, and currency via Yahoo Finance.
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               <Input placeholder="e.g. AAPL" value={form.ticker} onChange={e => set('ticker', e.target.value)} />
             </div>
           </div>
@@ -187,7 +203,7 @@ export function EditInvestmentDialog({ investment, open, onOpenChange, onSuccess
             </div>
             <div className="space-y-2">
               <Label>Quantity (optional)</Label>
-              <Input type="number" step="0.01" min="0.01" value={form.quantity} onChange={e => set('quantity', e.target.value)} />
+              <Input type="number" step="0.01" value={form.quantity} onChange={e => set('quantity', e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">

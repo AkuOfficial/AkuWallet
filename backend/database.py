@@ -108,6 +108,7 @@ async def migrate(conn: aiosqlite.Connection) -> None:
           date TEXT NOT NULL,
           recurrence TEXT NOT NULL DEFAULT 'none',
           recurrence_end_date TEXT,
+          linked_investment_id TEXT,
           created_at TEXT NOT NULL,
           updated_at TEXT,
           FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -169,11 +170,13 @@ async def migrate(conn: aiosqlite.Connection) -> None:
           quantity REAL,
           commission REAL NOT NULL DEFAULT 0,
           linked_account_id TEXT,
+          linked_transaction_id TEXT,
           is_automated INTEGER NOT NULL DEFAULT 0,
           created_at TEXT NOT NULL,
           updated_at TEXT,
           FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
-          FOREIGN KEY(linked_account_id) REFERENCES accounts(id) ON DELETE SET NULL
+          FOREIGN KEY(linked_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
+          FOREIGN KEY(linked_transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
         );
 
         CREATE TABLE IF NOT EXISTS exchange_rates (

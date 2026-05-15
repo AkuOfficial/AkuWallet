@@ -33,8 +33,7 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
     if (!price) return ''
     const p = parseFloat(price)
     const q = qty ? parseFloat(qty) : 1
-    const c = comm ? parseFloat(comm) : 0
-    return (Math.round((p * q + c) * 100) / 100).toFixed(2)
+    return (Math.round((p * q) * 100) / 100).toFixed(2)
   }
 
   const formatTickerPrice = (price: number) => price.toFixed(2)
@@ -136,7 +135,7 @@ export function AddInvestmentDialog({ onSuccess }: Props) {
             <Label>Name</Label>
             <Input placeholder="e.g. Apple Inc." value={form.name} onChange={e => set('name', e.target.value)} required />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 items-end">
             <div className="space-y-2">
               <Label>Type</Label>
               <Select value={form.type} onValueChange={v => set('type', v)}>

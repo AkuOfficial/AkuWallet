@@ -62,7 +62,7 @@ export function AddTransactionDialog({ categories, tags, baseCurrency = 'USD', o
       .catch(() => setAccounts([]))
   }, [])
 
-  const filteredCategories = categories.filter(c => c.type === type)
+  const filteredCategories = categories.filter(c => c.type === type && c.name !== 'Investments')
 
   const resetForm = () => {
     setType('expense')

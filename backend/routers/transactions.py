@@ -7,8 +7,18 @@ from database import db, fetchone
 from dependencies import get_current_user
 from models import TransactionCreate, TransactionUpdate
 from security import _now_iso
+from decimal import Decimal
+from services.exchange_rates import convert_amount
 
 router = fastapi.APIRouter(prefix="/transactions", tags=["transactions"])
+
+
+async def _get_investments_category_ids(conn, user_id: str) -> set[str]:
+    rows = await conn.execute_fetchall(
+        "SELECT id FROM categories WHERE name = 'Investments' AND ((user_id = ?) OR (is_default = 1))",
+        (user_id,),
+    )
+    return {r["id"] for r in rows}
 
 
 @router.get("")
@@ -109,6 +119,9 @@ async def create_transaction(
     tx_id = secrets.token_hex(16)
     created_at = _now_iso()
     async with db() as conn:
+        inv_category_ids = await _get_investments_category_ids(conn, user["id"])
+        if data.category_id and data.category_id in inv_category_ids:
+            raise fastapi.HTTPException(status_code=400, detail="Investments category can only be created from Investments panel")
         account_id = data.account_id
         if not account_id:
             default_account = await fetchone(
@@ -169,6 +182,24 @@ async def update_transaction(
              data.category_id, data.date, data.recurrence, data.recurrence_end_date, updated_at,
              transaction_id, user["id"]),
         )
+        tx_row = await fetchone(conn, "SELECT * FROM transactions WHERE id = ? AND user_id = ?", (transaction_id, user["id"]))
+        if tx_row and tx_row["linked_investment_id"]:
+            inv_id = tx_row["linked_investment_id"]
+            qty_sign = 1 if data.type == "expense" else -1
+            inv_qty = None
+            inv_unit = float(data.amount)
+            if tx_row["account_id"]:
+                acc = await fetchone(conn, "SELECT currency FROM accounts WHERE id = ? AND user_id = ?", (tx_row["account_id"], user["id"]))
+                if acc:
+                    inv_unit = float(await convert_amount(Decimal(str(data.amount)), acc["currency"], data.currency))
+            await conn.execute(
+                """
+                UPDATE investments
+                SET name = ?, ticker = ?, currency = ?, invested_amount = ?, current_value = ?, quantity = ?, updated_at = ?
+                WHERE id = ? AND user_id = ?
+                """,
+                (data.description or "Investment", None, data.currency, inv_unit, float(data.amount), inv_qty if inv_qty is not None else (1.0 * qty_sign), _now_iso(), inv_id, user["id"]),
+            )
         await conn.execute(
             "DELETE FROM transaction_tags WHERE transaction_id = ?", (transaction_id,)
         )
@@ -189,9 +220,12 @@ async def delete_transaction(
     user=fastapi.Depends(get_current_user),
 ):
     async with db() as conn:
+        row = await fetchone(conn, "SELECT linked_investment_id FROM transactions WHERE id = ? AND user_id = ?", (transaction_id, user["id"]))
         await conn.execute(
             "DELETE FROM transactions WHERE id = ? AND user_id = ?",
             (transaction_id, user["id"]),
         )
+        if row and row["linked_investment_id"]:
+            await conn.execute("DELETE FROM investments WHERE id = ? AND user_id = ?", (row["linked_investment_id"], user["id"]))
         await conn.commit()
     return {"success": True}
